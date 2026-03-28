@@ -129,17 +129,16 @@ export const fetchWeeklyReadings = async (systemId?: string) => {
   const userId = await getCurrentUserId();
   if (!userId) return [];
 
-  // Rolling 7 days: 6 days ago through end of today
+  // Rolling 7 complete days: yesterday back to 7 days ago (excludes today)
   const todayStart = getStartOfGmt8Day(new Date());
-  const sevenDaysAgo = new Date(todayStart.getTime() - 6 * DAY_MS);
-  const tomorrowStart = new Date(todayStart.getTime() + DAY_MS);
+  const sevenDaysAgo = new Date(todayStart.getTime() - 7 * DAY_MS);
 
   let query = supabase
     .from('energy_readings')
     .select('*')
     .eq('user_id', userId)
     .gte('timestamp', sevenDaysAgo.toISOString())
-    .lt('timestamp', tomorrowStart.toISOString())
+    .lt('timestamp', todayStart.toISOString())
     .order('timestamp', { ascending: true });
 
   if (systemId) {

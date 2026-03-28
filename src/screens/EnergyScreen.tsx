@@ -124,11 +124,11 @@ export default function EnergyScreen() {
       return { labels, production: prod, consumption: cons };
     }
 
-    // Default: 7 days — chronological from 6 days ago to today
+    // Default: 7 complete days — yesterday back to 7 days ago
     const dayLabels: string[] = [];
     const prod: number[] = [];
     const cons: number[] = [];
-    for (let i = 6; i >= 0; i--) {
+    for (let i = 7; i >= 1; i--) {
       const d = new Date(Date.now() - i * 86400000);
       const utcMs = d.getTime() + d.getTimezoneOffset() * 60000;
       const gmt8 = new Date(utcMs + 8 * 3600000);
@@ -142,7 +142,7 @@ export default function EnergyScreen() {
     if (weeklyData.length > 0) {
       weeklyData.forEach((r: any) => {
         const daysAgo = getDaysAgoInGmt8(r.timestamp);
-        const idx = 6 - daysAgo; // 6 days ago → index 0, today → index 6
+        const idx = 7 - daysAgo; // 7 days ago → index 0, yesterday → index 6
         if (idx >= 0 && idx < 7) {
           prod[idx] += Number(r.production_kwh);
           cons[idx] += Number(r.consumption_kwh);
