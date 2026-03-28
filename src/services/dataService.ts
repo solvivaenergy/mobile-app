@@ -129,20 +129,17 @@ export const fetchWeeklyReadings = async (systemId?: string) => {
   const userId = await getCurrentUserId();
   if (!userId) return [];
 
-  // Current ISO week: Monday to Sunday
-  const todayGmt8 = getGmt8Parts(new Date());
-  // getUTCDay: 0=Sun,1=Mon..6=Sat → days since Monday: Sun=6,Mon=0,Tue=1..Sat=5
-  const daysSinceMonday = todayGmt8.weekday === 0 ? 6 : todayGmt8.weekday - 1;
+  // Rolling 7 days: 6 days ago through end of today
   const todayStart = getStartOfGmt8Day(new Date());
-  const mondayStart = new Date(todayStart.getTime() - daysSinceMonday * DAY_MS);
-  const sundayEnd = new Date(mondayStart.getTime() + 7 * DAY_MS);
+  const sevenDaysAgo = new Date(todayStart.getTime() - 6 * DAY_MS);
+  const tomorrowStart = new Date(todayStart.getTime() + DAY_MS);
 
   let query = supabase
     .from('energy_readings')
     .select('*')
     .eq('user_id', userId)
-    .gte('timestamp', mondayStart.toISOString())
-    .lt('timestamp', sundayEnd.toISOString())
+    .gte('timestamp', sevenDaysAgo.toISOString())
+    .lt('timestamp', tomorrowStart.toISOString())
     .order('timestamp', { ascending: true });
 
   if (systemId) {
@@ -182,15 +179,17 @@ export const fetchMonthlyReadings = async (systemId?: string) => {
   const userId = await getCurrentUserId();
   if (!userId) return [];
 
+  // Rolling 28 days: 27 days ago through end of today
   const todayStart = getStartOfGmt8Day(new Date());
-  const monthAgo = new Date(todayStart.getTime() - 28 * DAY_MS);
+  const fourWeeksAgo = new Date(todayStart.getTime() - 27 * DAY_MS);
+  const tomorrowStart = new Date(todayStart.getTime() + DAY_MS);
 
   let query = supabase
     .from('energy_readings')
     .select('*')
     .eq('user_id', userId)
-    .gte('timestamp', monthAgo.toISOString())
-    .lt('timestamp', todayStart.toISOString())
+    .gte('timestamp', fourWeeksAgo.toISOString())
+    .lt('timestamp', tomorrowStart.toISOString())
     .order('timestamp', { ascending: true });
 
   if (systemId) {

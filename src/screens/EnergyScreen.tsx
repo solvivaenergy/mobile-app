@@ -12,41 +12,41 @@ import {
 import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
   fetchSolarSystem,
-  fetchTodayReadings,
   fetchWeeklyReadings,
   fetchMonthlyReadings,
   formatPeso,
-  formatTime,
   getDaysAgoInGmt8,
-  getWeekdayIndexInGmt8,
 } from "../services/dataService";
+import { fetchLiveData, LiveData } from "../services/apiService";
 
 const { width } = Dimensions.get("window");
 const PESO_PER_KWH = 11.5;
 
 export default function EnergyScreen() {
-  const [timeRange, setTimeRange] = useState<"today" | "week" | "month">(
-    "week",
+  const [timeRange, setTimeRange] = useState<"today" | "7days" | "4weeks">(
+    "7days",
   );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [system, setSystem] = useState<any>(null);
-  const [todayData, setTodayData] = useState<any[]>([]);
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [liveData, setLiveData] = useState<LiveData | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const [sys, today, weekly, monthly] = await Promise.all([
+      const [sys, weekly, monthly] = await Promise.all([
         fetchSolarSystem(),
-        fetchTodayReadings(),
         fetchWeeklyReadings(),
         fetchMonthlyReadings(),
       ]);
       setSystem(sys);
-      setTodayData(today);
       setWeeklyData(weekly);
       setMonthlyData(monthly);
+
+      // Fetch live data for real-time Today chart and readings (Solis 5-min intervals)
+      const live = await fetchLiveData();
+      setLiveData(live);
     } catch (err) {
       console.log("EnergyScreen loadData error:", err);
     } finally {
@@ -64,79 +64,40 @@ export default function EnergyScreen() {
     loadData();
   };
 
-  const getCurrentGmt8Hour = () => {
-    const now = new Date();
-    const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
+  const formatHour = (h: number) => {
+    const suffix = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12} ${suffix}`;
+  };
+
+  const formatReadingTime = (ts: string) => {
+    const d = new Date(ts);
+    const utcMs = d.getTime() + d.getTimezoneOffset() * 60 * 1000;
     const gmt8 = new Date(utcMs + 8 * 60 * 60 * 1000);
-    return gmt8.getUTCHours();
+    const hour = gmt8.getUTCHours();
+    const min = gmt8.getUTCMinutes();
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const h12 = hour % 12 || 12;
+    return `${h12}:${String(min).padStart(2, "0")} ${suffix}`;
   };
 
   // ---- Compute chart data based on selected timeRange ----
 
   const getDisplayData = () => {
     if (timeRange === "today") {
-      const nowHour = getCurrentGmt8Hour();
-
-      // Build 2-hour buckets starting at 5 AM (sunrise), up to current hour
-      const CHART_START_HOUR = 5;
-      const buckets: {
-        slotStart: number;
-        prod: number[];
-        cons: number[];
-      }[] = [];
-
-      for (
-        let slotStart = CHART_START_HOUR;
-        slotStart <= nowHour;
-        slotStart += 2
-      ) {
-        buckets.push({ slotStart, prod: [], cons: [] });
+      // Use live API's 2-hour buckets (labels are end-time: 7AM = 5-7AM data)
+      if (liveData?.today_hourly && liveData.today_hourly.length > 0) {
+        return {
+          labels: liveData.today_hourly.map((b) => formatHour(b.hour)),
+          production: liveData.today_hourly.map((b) => b.production_kwh),
+          consumption: liveData.today_hourly.map((b) => b.consumption_kwh),
+        };
       }
 
-      todayData.forEach((r: any) => {
-        const timestamp = new Date(r.timestamp);
-        const utcMs =
-          timestamp.getTime() + timestamp.getTimezoneOffset() * 60 * 1000;
-        const gmt8 = new Date(utcMs + 8 * 60 * 60 * 1000);
-        const hour = gmt8.getUTCHours();
-        if (hour > nowHour || hour < CHART_START_HOUR) return;
-        const slotStart =
-          CHART_START_HOUR + Math.floor((hour - CHART_START_HOUR) / 2) * 2;
-        const bucket = buckets.find((b) => b.slotStart === slotStart);
-        if (bucket) {
-          bucket.prod.push(Number(r.production_kwh || 0));
-          bucket.cons.push(Number(r.consumption_kwh || 0));
-        }
-      });
-
-      const avg = (arr: number[]) =>
-        arr.length === 0
-          ? 0
-          : Math.round((arr.reduce((s, v) => s + v, 0) / arr.length) * 100) /
-            100;
-
-      const formatHour = (h: number) => {
-        const suffix = h < 12 ? "AM" : "PM";
-        const h12 = h % 12 === 0 ? 12 : h % 12;
-        return `${h12} ${suffix}`;
-      };
-
-      const filledBuckets = buckets.filter(
-        (b) => b.prod.length > 0 || b.cons.length > 0,
-      );
-
-      if (filledBuckets.length === 0) {
-        return { labels: ["No data"], production: [0], consumption: [0] };
-      }
-
-      return {
-        labels: filledBuckets.map((b) => formatHour(b.slotStart)),
-        production: filledBuckets.map((b) => avg(b.prod)),
-        consumption: filledBuckets.map((b) => avg(b.cons)),
-      };
+      return { labels: ["No data"], production: [0], consumption: [0] };
     }
 
-    if (timeRange === "month") {
+    if (timeRange === "4weeks") {
       const labels = ["Week 1", "Week 2", "Week 3", "Week 4"];
       const prod = [0, 0, 0, 0];
       const cons = [0, 0, 0, 0];
@@ -152,7 +113,6 @@ export default function EnergyScreen() {
           prod[weekIdx] += Number(r.production_kwh);
           cons[weekIdx] += Number(r.consumption_kwh);
         });
-        // Round for display
         prod.forEach((_, i) => {
           prod[i] = Math.round(prod[i] * 10) / 10;
         });
@@ -164,16 +124,28 @@ export default function EnergyScreen() {
       return { labels, production: prod, consumption: cons };
     }
 
-    // Default: week — distribute across days
-    const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const prod = dayLabels.map(() => 0);
-    const cons = dayLabels.map(() => 0);
+    // Default: 7 days — chronological from 6 days ago to today
+    const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dayLabels: string[] = [];
+    const prod: number[] = [];
+    const cons: number[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const utcMs = d.getTime() + d.getTimezoneOffset() * 60000;
+      const gmt8 = new Date(utcMs + 8 * 3600000);
+      dayLabels.push(WEEKDAY_SHORT[gmt8.getUTCDay()]);
+      prod.push(0);
+      cons.push(0);
+    }
 
     if (weeklyData.length > 0) {
       weeklyData.forEach((r: any) => {
-        const idx = getWeekdayIndexInGmt8(r.timestamp);
-        prod[idx] += Number(r.production_kwh);
-        cons[idx] += Number(r.consumption_kwh);
+        const daysAgo = getDaysAgoInGmt8(r.timestamp);
+        const idx = 6 - daysAgo; // 6 days ago → index 0, today → index 6
+        if (idx >= 0 && idx < 7) {
+          prod[idx] += Number(r.production_kwh);
+          cons[idx] += Number(r.consumption_kwh);
+        }
       });
     }
 
@@ -198,12 +170,10 @@ export default function EnergyScreen() {
         )
       : 0;
   const totalGridExport = (() => {
-    const data =
-      timeRange === "week"
-        ? weeklyData
-        : timeRange === "month"
-          ? monthlyData
-          : todayData;
+    if (timeRange === "today") {
+      return liveData?.today_grid_export_kwh ?? 0;
+    }
+    const data = timeRange === "7days" ? weeklyData : monthlyData;
     return data.reduce(
       (sum: number, r: any) => sum + Number(r.grid_export_kwh || 0),
       0,
@@ -212,20 +182,21 @@ export default function EnergyScreen() {
   const hasGridExport = totalGridExport > 0;
   const showConsumption = hasConsumption || timeRange === "today";
 
-  const visibleTodayReadings = todayData.filter((reading: any) => {
-    const production = Number(reading.production_kwh || 0);
-    const consumption = Number(reading.consumption_kwh || 0);
-    return production > 0 || consumption > 0;
-  });
+  // 5-min readings from live API for Today's Readings list
+  const liveReadings = liveData?.today_readings ?? [];
 
   // Check if any reading has battery data
-  const hasBattery = todayData.some(
-    (r: any) => r.battery_level != null && Number(r.battery_level) > 0,
+  const hasBattery = liveReadings.some(
+    (r) => r.battery_level != null && r.battery_level > 0,
   );
 
   // Determine period label for the finance section
   const periodLabel =
-    timeRange === "today" ? "Today" : timeRange === "month" ? "Month" : "Week";
+    timeRange === "today"
+      ? "Today"
+      : timeRange === "4weeks"
+        ? "4-Week"
+        : "7-Day";
 
   if (loading) {
     return (
@@ -259,22 +230,26 @@ export default function EnergyScreen() {
 
       {/* Time Range Selector */}
       <View style={styles.timeSelector}>
-        {(["today", "week", "month"] as const).map((range) => (
+        {([
+          { key: "today", label: "Today" },
+          { key: "7days", label: "7 Days" },
+          { key: "4weeks", label: "4 Weeks" },
+        ] as const).map(({ key, label }) => (
           <TouchableOpacity
-            key={range}
+            key={key}
             style={[
               styles.timeButton,
-              timeRange === range && styles.timeButtonActive,
+              timeRange === key && styles.timeButtonActive,
             ]}
-            onPress={() => setTimeRange(range)}
+            onPress={() => setTimeRange(key)}
           >
             <Text
               style={[
                 styles.timeButtonText,
-                timeRange === range && styles.timeButtonTextActive,
+                timeRange === key && styles.timeButtonTextActive,
               ]}
             >
-              {range.charAt(0).toUpperCase() + range.slice(1)}
+              {label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -387,26 +362,26 @@ export default function EnergyScreen() {
       {/* Today's Readings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Today's Readings</Text>
-        {visibleTodayReadings.length === 0 && (
+        {liveReadings.length === 0 && (
           <Text style={{ color: Colors.textSecondary, fontSize: FontSizes.md }}>
             No readings yet today.
           </Text>
         )}
-        {visibleTodayReadings.length > 0 && (
+        {liveReadings.length > 0 && (
           <View style={styles.readingsContainer}>
             <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
-              {visibleTodayReadings.map((reading: any) => {
-                const time = formatTime(reading.timestamp);
+              {liveReadings.map((reading, index) => {
+                const time = formatReadingTime(reading.timestamp);
                 return (
-                  <View key={reading.id} style={styles.readingRow}>
+                  <View key={index} style={styles.readingRow}>
                     <Text style={styles.readingTime}>{time}</Text>
                     <View style={styles.readingValues}>
                       <Text style={styles.readingProduction}>
-                        ☀️ {reading.production_kwh} kWh
+                        ☀️ {reading.production_kw} kW
                       </Text>
                       {showConsumption && (
                         <Text style={styles.readingConsumption}>
-                          ⚡ {reading.consumption_kwh} kWh
+                          ⚡ {reading.consumption_kw} kW
                         </Text>
                       )}
                     </View>
@@ -451,7 +426,7 @@ export default function EnergyScreen() {
           )}
           <View style={[styles.financeRow, styles.financeTotal]}>
             <Text style={styles.financeTotalLabel}>
-              Estimated {periodLabel}ly Savings
+              Estimated Savings ({periodLabel})
             </Text>
             <Text style={styles.financeTotalValue}>
               {formatPeso(totalProduction * PESO_PER_KWH)}
