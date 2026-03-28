@@ -129,15 +129,20 @@ export const fetchWeeklyReadings = async (systemId?: string) => {
   const userId = await getCurrentUserId();
   if (!userId) return [];
 
+  // Current ISO week: Monday to Sunday
+  const todayGmt8 = getGmt8Parts(new Date());
+  // getUTCDay: 0=Sun,1=Mon..6=Sat → days since Monday: Sun=6,Mon=0,Tue=1..Sat=5
+  const daysSinceMonday = todayGmt8.weekday === 0 ? 6 : todayGmt8.weekday - 1;
   const todayStart = getStartOfGmt8Day(new Date());
-  const weekAgo = new Date(todayStart.getTime() - 7 * DAY_MS);
+  const mondayStart = new Date(todayStart.getTime() - daysSinceMonday * DAY_MS);
+  const sundayEnd = new Date(mondayStart.getTime() + 7 * DAY_MS);
 
   let query = supabase
     .from('energy_readings')
     .select('*')
     .eq('user_id', userId)
-    .gte('timestamp', weekAgo.toISOString())
-    .lt('timestamp', todayStart.toISOString())
+    .gte('timestamp', mondayStart.toISOString())
+    .lt('timestamp', sundayEnd.toISOString())
     .order('timestamp', { ascending: true });
 
   if (systemId) {
