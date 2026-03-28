@@ -178,17 +178,21 @@ export const fetchMonthlyReadings = async (systemId?: string) => {
   const userId = await getCurrentUserId();
   if (!userId) return [];
 
-  // Rolling 28 days: 27 days ago through end of today
+  // 4 complete ISO weeks (Mon–Sun), excluding the current incomplete week.
+  // Find Monday 00:00 PHT of the current ISO week, then go back 4 weeks.
+  const nowParts = getGmt8Parts(new Date());
+  // JS weekday: 0=Sun..6=Sat  →  days since Monday: Mon=0,Tue=1,...,Sun=6
+  const daysSinceMonday = (nowParts.weekday + 6) % 7;
   const todayStart = getStartOfGmt8Day(new Date());
-  const fourWeeksAgo = new Date(todayStart.getTime() - 27 * DAY_MS);
-  const tomorrowStart = new Date(todayStart.getTime() + DAY_MS);
+  const thisMonday = new Date(todayStart.getTime() - daysSinceMonday * DAY_MS);
+  const fourWeeksAgo = new Date(thisMonday.getTime() - 4 * 7 * DAY_MS);
 
   let query = supabase
     .from('energy_readings')
     .select('*')
     .eq('user_id', userId)
     .gte('timestamp', fourWeeksAgo.toISOString())
-    .lt('timestamp', tomorrowStart.toISOString())
+    .lt('timestamp', thisMonday.toISOString())
     .order('timestamp', { ascending: true });
 
   if (systemId) {
@@ -431,6 +435,29 @@ export const getDaysAgoInGmt8 = (dateStr: string): number => {
   const todayStart = getStartOfGmt8Day(new Date()).getTime();
   const dateStart = getStartOfGmt8Day(dateStr).getTime();
   return Math.floor((todayStart - dateStart) / DAY_MS);
+};
+
+/**
+ * Returns the 4 Monday dates (MM/DD) for the 4 complete ISO weeks before the
+ * current week, ordered oldest → newest, plus the Monday epoch (PHT) for each.
+ */
+export const getFourWeekMondays = (): { labels: string[]; mondayEpochs: number[] } => {
+  const nowParts = getGmt8Parts(new Date());
+  const daysSinceMonday = (nowParts.weekday + 6) % 7;
+  const todayStart = getStartOfGmt8Day(new Date());
+  const thisMonday = todayStart.getTime() - daysSinceMonday * DAY_MS;
+
+  const labels: string[] = [];
+  const mondayEpochs: number[] = [];
+  for (let i = 4; i >= 1; i--) {
+    const mon = new Date(thisMonday - i * 7 * DAY_MS);
+    const parts = getGmt8Parts(mon);
+    const mm = String(parts.month + 1).padStart(2, '0');
+    const dd = String(parts.day).padStart(2, '0');
+    labels.push(`${mm}/${dd}`);
+    mondayEpochs.push(mon.getTime());
+  }
+  return { labels, mondayEpochs };
 };
 
 export const isPastDateInGmt8 = (dateStr: string): boolean => {

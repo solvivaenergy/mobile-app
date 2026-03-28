@@ -16,6 +16,7 @@ import {
   fetchMonthlyReadings,
   formatPeso,
   getDaysAgoInGmt8,
+  getFourWeekMondays,
 } from "../services/dataService";
 import { fetchLiveData, LiveData } from "../services/apiService";
 
@@ -98,20 +99,21 @@ export default function EnergyScreen() {
     }
 
     if (timeRange === "4weeks") {
-      const labels = ["Week 1", "Week 2", "Week 3", "Week 4"];
+      const { labels, mondayEpochs } = getFourWeekMondays();
       const prod = [0, 0, 0, 0];
       const cons = [0, 0, 0, 0];
+      const WEEK_MS = 7 * 86400000;
 
       if (monthlyData.length > 0) {
         monthlyData.forEach((r: any) => {
-          const daysAgo = getDaysAgoInGmt8(r.timestamp);
-          let weekIdx: number;
-          if (daysAgo < 7) weekIdx = 3;
-          else if (daysAgo < 14) weekIdx = 2;
-          else if (daysAgo < 21) weekIdx = 1;
-          else weekIdx = 0;
-          prod[weekIdx] += Number(r.production_kwh);
-          cons[weekIdx] += Number(r.consumption_kwh);
+          const rTime = new Date(r.timestamp).getTime();
+          for (let i = 0; i < 4; i++) {
+            if (rTime >= mondayEpochs[i] && rTime < mondayEpochs[i] + WEEK_MS) {
+              prod[i] += Number(r.production_kwh);
+              cons[i] += Number(r.consumption_kwh);
+              break;
+            }
+          }
         });
         prod.forEach((_, i) => {
           prod[i] = Math.round(prod[i] * 10) / 10;
@@ -365,7 +367,11 @@ export default function EnergyScreen() {
       {/* Readings Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          {timeRange === "today" ? "Today's Readings" : "Daily Readings"}
+          {timeRange === "today"
+            ? "Today's Readings"
+            : timeRange === "4weeks"
+              ? "Weekly Readings"
+              : "Daily Readings"}
         </Text>
 
         {/* Today tab: 5-min live readings */}
@@ -405,65 +411,68 @@ export default function EnergyScreen() {
         )}
 
         {/* 7 Days / 4 Weeks tab: daily summary readings */}
-        {timeRange !== "today" && (() => {
-          const data = timeRange === "7days" ? weeklyData : monthlyData;
-          // Group by date label
-          const dailyMap = new Map<string, { prod: number; cons: number }>();
-          // Initialize with chart labels so order is preserved
-          chartLabels.forEach((label) => {
-            dailyMap.set(label, { prod: 0, cons: 0 });
-          });
-          if (timeRange === "7days") {
-            data.forEach((r: any) => {
-              const daysAgo = getDaysAgoInGmt8(r.timestamp);
-              const idx = 7 - daysAgo;
-              if (idx >= 0 && idx < 7) {
-                const label = chartLabels[idx];
-                const entry = dailyMap.get(label)!;
-                entry.prod += Number(r.production_kwh);
-                entry.cons += Number(r.consumption_kwh);
-              }
+        {timeRange !== "today" &&
+          (() => {
+            const data = timeRange === "7days" ? weeklyData : monthlyData;
+            // Group by date label
+            const dailyMap = new Map<string, { prod: number; cons: number }>();
+            // Initialize with chart labels so order is preserved
+            chartLabels.forEach((label) => {
+              dailyMap.set(label, { prod: 0, cons: 0 });
             });
-          } else {
-            // 4 weeks — group by week label
-            data.forEach((r: any) => {
-              const daysAgo = getDaysAgoInGmt8(r.timestamp);
-              let weekIdx: number;
-              if (daysAgo < 7) weekIdx = 3;
-              else if (daysAgo < 14) weekIdx = 2;
-              else if (daysAgo < 21) weekIdx = 1;
-              else weekIdx = 0;
-              const label = chartLabels[weekIdx];
-              if (label) {
-                const entry = dailyMap.get(label)!;
-                entry.prod += Number(r.production_kwh);
-                entry.cons += Number(r.consumption_kwh);
-              }
-            });
-          }
-          const entries = Array.from(dailyMap.entries());
-          return (
-            <View style={styles.readingsContainer}>
-              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
-                {entries.map(([label, vals]) => (
-                  <View key={label} style={styles.readingRow}>
-                    <Text style={styles.readingTime}>{label}</Text>
-                    <View style={styles.readingValues}>
-                      <Text style={styles.readingProduction}>
-                        ☀️ {vals.prod.toFixed(1)} kWh
-                      </Text>
-                      {hasConsumption && (
-                        <Text style={styles.readingConsumption}>
-                          ⚡ {vals.cons.toFixed(1)} kWh
+            if (timeRange === "7days") {
+              data.forEach((r: any) => {
+                const daysAgo = getDaysAgoInGmt8(r.timestamp);
+                const idx = 7 - daysAgo;
+                if (idx >= 0 && idx < 7) {
+                  const label = chartLabels[idx];
+                  const entry = dailyMap.get(label)!;
+                  entry.prod += Number(r.production_kwh);
+                  entry.cons += Number(r.consumption_kwh);
+                }
+              });
+            } else {
+              // 4 weeks — group by ISO week (Monday date labels)
+              const { mondayEpochs } = getFourWeekMondays();
+              const WEEK_MS = 7 * 86400000;
+              data.forEach((r: any) => {
+                const rTime = new Date(r.timestamp).getTime();
+                for (let i = 0; i < 4; i++) {
+                  if (rTime >= mondayEpochs[i] && rTime < mondayEpochs[i] + WEEK_MS) {
+                    const label = chartLabels[i];
+                    if (label) {
+                      const entry = dailyMap.get(label)!;
+                      entry.prod += Number(r.production_kwh);
+                      entry.cons += Number(r.consumption_kwh);
+                    }
+                    break;
+                  }
+                }
+              });
+            }
+            const entries = Array.from(dailyMap.entries());
+            return (
+              <View style={styles.readingsContainer}>
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
+                  {entries.map(([label, vals]) => (
+                    <View key={label} style={styles.readingRow}>
+                      <Text style={styles.readingTime}>{label}</Text>
+                      <View style={styles.readingValues}>
+                        <Text style={styles.readingProduction}>
+                          ☀️ {vals.prod.toFixed(1)} kWh
                         </Text>
-                      )}
+                        {hasConsumption && (
+                          <Text style={styles.readingConsumption}>
+                            ⚡ {vals.cons.toFixed(1)} kWh
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          );
-        })()}
+                  ))}
+                </ScrollView>
+              </View>
+            );
+          })()}
       </View>
 
       {/* Financial Tracking */}
