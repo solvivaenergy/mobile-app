@@ -362,15 +362,19 @@ export default function EnergyScreen() {
         </View>
       </View>
 
-      {/* Today's Readings */}
+      {/* Readings Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Today's Readings</Text>
-        {liveReadings.length === 0 && (
+        <Text style={styles.sectionTitle}>
+          {timeRange === "today" ? "Today's Readings" : "Daily Readings"}
+        </Text>
+
+        {/* Today tab: 5-min live readings */}
+        {timeRange === "today" && liveReadings.length === 0 && (
           <Text style={{ color: Colors.textSecondary, fontSize: FontSizes.md }}>
             No readings yet today.
           </Text>
         )}
-        {liveReadings.length > 0 && (
+        {timeRange === "today" && liveReadings.length > 0 && (
           <View style={styles.readingsContainer}>
             <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
               {liveReadings.map((reading, index) => {
@@ -399,6 +403,67 @@ export default function EnergyScreen() {
             </ScrollView>
           </View>
         )}
+
+        {/* 7 Days / 4 Weeks tab: daily summary readings */}
+        {timeRange !== "today" && (() => {
+          const data = timeRange === "7days" ? weeklyData : monthlyData;
+          // Group by date label
+          const dailyMap = new Map<string, { prod: number; cons: number }>();
+          // Initialize with chart labels so order is preserved
+          chartLabels.forEach((label) => {
+            dailyMap.set(label, { prod: 0, cons: 0 });
+          });
+          if (timeRange === "7days") {
+            data.forEach((r: any) => {
+              const daysAgo = getDaysAgoInGmt8(r.timestamp);
+              const idx = 7 - daysAgo;
+              if (idx >= 0 && idx < 7) {
+                const label = chartLabels[idx];
+                const entry = dailyMap.get(label)!;
+                entry.prod += Number(r.production_kwh);
+                entry.cons += Number(r.consumption_kwh);
+              }
+            });
+          } else {
+            // 4 weeks — group by week label
+            data.forEach((r: any) => {
+              const daysAgo = getDaysAgoInGmt8(r.timestamp);
+              let weekIdx: number;
+              if (daysAgo < 7) weekIdx = 3;
+              else if (daysAgo < 14) weekIdx = 2;
+              else if (daysAgo < 21) weekIdx = 1;
+              else weekIdx = 0;
+              const label = chartLabels[weekIdx];
+              if (label) {
+                const entry = dailyMap.get(label)!;
+                entry.prod += Number(r.production_kwh);
+                entry.cons += Number(r.consumption_kwh);
+              }
+            });
+          }
+          const entries = Array.from(dailyMap.entries());
+          return (
+            <View style={styles.readingsContainer}>
+              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
+                {entries.map(([label, vals]) => (
+                  <View key={label} style={styles.readingRow}>
+                    <Text style={styles.readingTime}>{label}</Text>
+                    <View style={styles.readingValues}>
+                      <Text style={styles.readingProduction}>
+                        ☀️ {vals.prod.toFixed(1)} kWh
+                      </Text>
+                      {hasConsumption && (
+                        <Text style={styles.readingConsumption}>
+                          ⚡ {vals.cons.toFixed(1)} kWh
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          );
+        })()}
       </View>
 
       {/* Financial Tracking */}
