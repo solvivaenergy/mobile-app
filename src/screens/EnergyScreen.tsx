@@ -125,7 +125,6 @@ export default function EnergyScreen() {
     }
 
     // Default: 7 days — chronological from 6 days ago to today
-    const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dayLabels: string[] = [];
     const prod: number[] = [];
     const cons: number[] = [];
@@ -133,7 +132,9 @@ export default function EnergyScreen() {
       const d = new Date(Date.now() - i * 86400000);
       const utcMs = d.getTime() + d.getTimezoneOffset() * 60000;
       const gmt8 = new Date(utcMs + 8 * 3600000);
-      dayLabels.push(WEEKDAY_SHORT[gmt8.getUTCDay()]);
+      const mm = String(gmt8.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(gmt8.getUTCDate()).padStart(2, "0");
+      dayLabels.push(`${mm}/${dd}`);
       prod.push(0);
       cons.push(0);
     }
@@ -230,11 +231,13 @@ export default function EnergyScreen() {
 
       {/* Time Range Selector */}
       <View style={styles.timeSelector}>
-        {([
-          { key: "today", label: "Today" },
-          { key: "7days", label: "7 Days" },
-          { key: "4weeks", label: "4 Weeks" },
-        ] as const).map(({ key, label }) => (
+        {(
+          [
+            { key: "today", label: "Today" },
+            { key: "7days", label: "7 Days" },
+            { key: "4weeks", label: "4 Weeks" },
+          ] as const
+        ).map(({ key, label }) => (
           <TouchableOpacity
             key={key}
             style={[
