@@ -71,30 +71,59 @@ export default function EnergyScreen() {
     return `${h12} ${suffix}`;
   };
 
+  // const formatReadingTime = (ts: string) => {
+  //   const d = new Date(ts);
+  //   const utcMs = d.getTime() + d.getTimezoneOffset() * 60 * 1000;
+  //   const gmt8 = new Date(utcMs + 8 * 60 * 60 * 1000);
+  //   const hour = gmt8.getUTCHours();
+  //   const min = gmt8.getUTCMinutes();
+  //   const suffix = hour >= 12 ? "PM" : "AM";
+  //   const h12 = hour % 12 || 12;
+  //   return `${h12}:${String(min).padStart(2, "0")} ${suffix}`;
+  // };
+
   const formatReadingTime = (ts: string) => {
     const d = new Date(ts);
-    const utcMs = d.getTime() + d.getTimezoneOffset() * 60 * 1000;
-    const gmt8 = new Date(utcMs + 8 * 60 * 60 * 1000);
+    // Directly add 8 hours to the absolute UTC epoch time
+    const gmt8 = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+
     const hour = gmt8.getUTCHours();
     const min = gmt8.getUTCMinutes();
     const suffix = hour >= 12 ? "PM" : "AM";
     const h12 = hour % 12 || 12;
+
     return `${h12}:${String(min).padStart(2, "0")} ${suffix}`;
   };
-
   // ---- Compute chart data based on selected timeRange ----
 
   const getDisplayData = () => {
     if (timeRange === "today") {
-      // Use live API's 2-hour buckets (labels are end-time: 7AM = 5-7AM data)
+      // // Use live API's 2-hour buckets (labels are end-time: 7AM = 5-7AM data)
+      // if (liveData?.today_hourly && liveData.today_hourly.length > 0) {
+      //   return {
+      //     labels: liveData.today_hourly.map((b) => formatHour(b.hour)),
+      //     production: liveData.today_hourly.map((b) => b.production_kwh),
+      //     consumption: liveData.today_hourly.map((b) => b.consumption_kwh),
+      //   };
+      // }
       if (liveData?.today_hourly && liveData.today_hourly.length > 0) {
-        return {
-          labels: liveData.today_hourly.map((b) => formatHour(b.hour)),
-          production: liveData.today_hourly.map((b) => b.production_kwh),
-          consumption: liveData.today_hourly.map((b) => b.consumption_kwh),
-        };
-      }
+        // Get current hour in GMT+8
+        const now = new Date();
+        const currentGmt8Hour = (now.getUTCHours() + 8) % 24;
 
+        // Filter out buckets whose end hour is greater than the current hour
+        const completeBuckets = liveData.today_hourly.filter(
+          (b) => b.hour <= currentGmt8Hour,
+        );
+
+        if (completeBuckets.length > 0) {
+          return {
+            labels: completeBuckets.map((b) => formatHour(b.hour)),
+            production: completeBuckets.map((b) => b.production_kwh),
+            consumption: completeBuckets.map((b) => b.consumption_kwh),
+          };
+        }
+      }
       return { labels: ["No data"], production: [0], consumption: [0] };
     }
 
@@ -127,20 +156,36 @@ export default function EnergyScreen() {
     }
 
     // Default: 7 complete days — yesterday back to 7 days ago
+    // const dayLabels: string[] = [];
+    // const prod: number[] = [];
+    // const cons: number[] = [];
+    // for (let i = 7; i >= 1; i--) {
+    //   const d = new Date(Date.now() - i * 86400000);
+    //   const utcMs = d.getTime() + d.getTimezoneOffset() * 60000;
+    //   const gmt8 = new Date(utcMs + 8 * 3600000);
+    //   const mm = String(gmt8.getUTCMonth() + 1).padStart(2, "0");
+    //   const dd = String(gmt8.getUTCDate()).padStart(2, "0");
+    //   dayLabels.push(`${mm}/${dd}`);
+    //   prod.push(0);
+    //   cons.push(0);
+    // }
+
+    // Default: 7 complete days — yesterday back to 7 days ago
     const dayLabels: string[] = [];
     const prod: number[] = [];
     const cons: number[] = [];
     for (let i = 7; i >= 1; i--) {
       const d = new Date(Date.now() - i * 86400000);
-      const utcMs = d.getTime() + d.getTimezoneOffset() * 60000;
-      const gmt8 = new Date(utcMs + 8 * 3600000);
+
+      // Directly add 8 hours to the absolute UTC epoch time
+      const gmt8 = new Date(d.getTime() + 8 * 3600000);
+
       const mm = String(gmt8.getUTCMonth() + 1).padStart(2, "0");
       const dd = String(gmt8.getUTCDate()).padStart(2, "0");
       dayLabels.push(`${mm}/${dd}`);
       prod.push(0);
       cons.push(0);
     }
-
     if (weeklyData.length > 0) {
       weeklyData.forEach((r: any) => {
         const daysAgo = getDaysAgoInGmt8(r.timestamp);
@@ -438,7 +483,10 @@ export default function EnergyScreen() {
               data.forEach((r: any) => {
                 const rTime = new Date(r.timestamp).getTime();
                 for (let i = 0; i < 4; i++) {
-                  if (rTime >= mondayEpochs[i] && rTime < mondayEpochs[i] + WEEK_MS) {
+                  if (
+                    rTime >= mondayEpochs[i] &&
+                    rTime < mondayEpochs[i] + WEEK_MS
+                  ) {
                     const label = chartLabels[i];
                     if (label) {
                       const entry = dailyMap.get(label)!;

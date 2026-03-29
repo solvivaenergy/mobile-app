@@ -44,11 +44,11 @@ export default function HomeScreen({ navigation }: any) {
 
   const loadData = useCallback(async () => {
     try {
-      const [profile, weeklyData, liveData, payment, billing, referrals, tips] =
+      // Load fast Supabase data first so the UI renders quickly
+      const [profile, weeklyData, payment, billing, referrals, tips] =
         await Promise.all([
           fetchUserProfile(),
           fetchWeeklyReadings(),
-          fetchLiveData(),
           fetchUpcomingPayment(),
           fetchBillingRecords(),
           fetchReferrals(),
@@ -56,16 +56,6 @@ export default function HomeScreen({ navigation }: any) {
         ]);
 
       if (profile) setUserName(profile.full_name);
-
-      // Real-time data from Solis via FastAPI
-      if (liveData) {
-        setBatteryLevel(liveData.battery_level ?? 0);
-        setBatteryStatus(liveData.battery_status || "idle");
-        setSolarEarnings(
-          Math.round(liveData.alltime_production_kwh * PESO_PER_KWH * 100) /
-            100,
-        );
-      }
 
       if (weeklyData.length > 0) {
         const prod = weeklyData.reduce(
@@ -119,9 +109,23 @@ export default function HomeScreen({ navigation }: any) {
         const unread = tips.find((t: any) => !t.is_read);
         setEnergyTip(unread || tips[0]);
       }
+
+      // Show UI now, then load live data in background (may be slow due to Render cold start)
+      setLoading(false);
+      setRefreshing(false);
+
+      // Fire live data separately — won't block UI
+      const liveData = await fetchLiveData();
+      if (liveData) {
+        setBatteryLevel(liveData.battery_level ?? 0);
+        setBatteryStatus(liveData.battery_status || "idle");
+        setSolarEarnings(
+          Math.round(liveData.alltime_production_kwh * PESO_PER_KWH * 100) /
+            100,
+        );
+      }
     } catch (err) {
       console.log("HomeScreen loadData error:", err);
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }

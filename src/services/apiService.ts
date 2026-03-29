@@ -1,8 +1,7 @@
 import { supabase } from './supabase';
 
 // The FastAPI monitoring service URL (Render deployment)
-// Matches the service name in render.yaml: solviva-api
-const API_BASE_URL = 'https://solviva-api.onrender.com';
+const API_BASE_URL = 'https://api.solvivaenergy.com';
 
 export type LiveData = {
   current_power_w: number;
@@ -16,6 +15,8 @@ export type LiveData = {
   station_name: string;
   alltime_production_kwh: number;
   month_production_kwh: number;
+  today_hourly?: { hour: number; production_kwh: number; consumption_kwh: number }[];
+  today_readings?: { timestamp: string; production_kw: number; consumption_kw: number; battery_level: number | null }[];
 };
 
 /**
@@ -32,13 +33,19 @@ export const fetchLiveData = async (): Promise<LiveData | null> => {
       return null;
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
     const response = await fetch(`${API_BASE_URL}/app/live`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) {
       console.log('fetchLiveData error:', response.status, await response.text());
@@ -46,8 +53,12 @@ export const fetchLiveData = async (): Promise<LiveData | null> => {
     }
 
     return await response.json();
-  } catch (error) {
-    console.log('fetchLiveData network error:', error);
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      console.log('fetchLiveData: timed out after 10s');
+    } else {
+      console.log('fetchLiveData network error:', error);
+    }
     return null;
   }
 };
