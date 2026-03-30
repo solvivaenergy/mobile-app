@@ -21,7 +21,7 @@ import {
   formatDate,
   isPastDateInGmt8,
 } from "../services/dataService";
-import { fetchLiveData } from "../services/apiService";
+import { fetchHomeLiveData } from "../services/apiService";
 
 const { width } = Dimensions.get("window");
 
@@ -45,7 +45,7 @@ export default function HomeScreen({ navigation }: any) {
   const loadData = useCallback(async () => {
     try {
       // Load fast Supabase data first so the UI renders quickly
-      const [profile, weeklyData, payment, billing, referrals, tips] =
+      const [profile, weeklyData, payment, billing, referrals, tips, liveData] =
         await Promise.all([
           fetchUserProfile(),
           fetchWeeklyReadings(),
@@ -53,6 +53,7 @@ export default function HomeScreen({ navigation }: any) {
           fetchBillingRecords(),
           fetchReferrals(),
           fetchEnergyTips(),
+          fetchHomeLiveData(),
         ]);
 
       if (profile) setUserName(profile.full_name);
@@ -110,12 +111,6 @@ export default function HomeScreen({ navigation }: any) {
         setEnergyTip(unread || tips[0]);
       }
 
-      // Show UI now, then load five-minute energy data in the background.
-      setLoading(false);
-      setRefreshing(false);
-
-      // Load table-backed live metrics separately so home renders quickly.
-      const liveData = await fetchLiveData();
       if (liveData) {
         setBatteryLevel(liveData.battery_level ?? 0);
         setBatteryStatus(liveData.battery_status || "idle");
@@ -125,6 +120,9 @@ export default function HomeScreen({ navigation }: any) {
               100,
         );
       }
+
+      setLoading(false);
+      setRefreshing(false);
     } catch (err) {
       console.log("HomeScreen loadData error:", err);
       setLoading(false);
