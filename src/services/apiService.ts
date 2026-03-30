@@ -104,7 +104,7 @@ export const fetchLiveData = async (): Promise<LiveData | null> => {
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
 
-    const [todayResult, latestResult, monthResult] =
+    const [todayResult, latestResult, monthResult, lifetimeResult] =
       await Promise.all([
         supabase
           .from("energy_readings_five_minutes")
@@ -124,6 +124,13 @@ export const fetchLiveData = async (): Promise<LiveData | null> => {
           .select("production_kwh")
           .eq("user_id", user.id)
           .gte("timestamp", monthStart.toISOString()),
+        supabase
+          .from("energy_readings_five_minutes")
+          .select("lifetime_earning")
+          .eq("user_id", user.id)
+          .order("lifetime_earning", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
 
     if (todayResult.error) {
@@ -141,9 +148,15 @@ export const fetchLiveData = async (): Promise<LiveData | null> => {
       return null;
     }
 
+    if (lifetimeResult.error) {
+      console.log("fetchLiveData lifetime error:", lifetimeResult.error.message);
+      return null;
+    }
+
     const todayRows = (todayResult.data ?? []) as FiveMinuteRow[];
     const latestRow = (latestResult.data ?? null) as FiveMinuteRow | null;
     const monthRows = (monthResult.data ?? []) as FiveMinuteRow[];
+    const lifetimeRow = (lifetimeResult.data ?? null) as FiveMinuteRow | null;
 
     const todayProduction = sumBy(todayRows, (row) =>
       toNumber(row.production_kwh, row.production_kw),
@@ -163,6 +176,7 @@ export const fetchLiveData = async (): Promise<LiveData | null> => {
       );
 
     const lifetimeSavings = toNumber(
+      lifetimeRow?.lifetime_earning,
       latestRow?.lifetime_earning,
       latestRow?.lifetime_savings_php,
       latestRow?.lifetime_earning_php,
