@@ -45,7 +45,7 @@ export default function EnergyScreen() {
       setWeeklyData(weekly);
       setMonthlyData(monthly);
 
-      // Fetch live data for real-time Today chart and readings (Solis 5-min intervals)
+      // Fetch today's five-minute readings for the Today chart and list.
       const live = await fetchLiveData();
       setLiveData(live);
     } catch (err) {
@@ -98,7 +98,7 @@ export default function EnergyScreen() {
 
   const getDisplayData = () => {
     if (timeRange === "today") {
-      // // Use live API's 2-hour buckets (labels are end-time: 7AM = 5-7AM data)
+      // Use hourly buckets built from five-minute table rows.
       // if (liveData?.today_hourly && liveData.today_hourly.length > 0) {
       //   return {
       //     labels: liveData.today_hourly.map((b) => formatHour(b.hour)),
@@ -230,7 +230,7 @@ export default function EnergyScreen() {
   const hasGridExport = totalGridExport > 0;
   const showConsumption = hasConsumption || timeRange === "today";
 
-  // 5-min readings from live API for Today's Readings list
+  // Five-minute readings from the table for Today's Readings.
   const liveReadings = liveData?.today_readings ?? [];
 
   // Check if any reading has battery data

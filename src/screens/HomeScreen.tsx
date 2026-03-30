@@ -110,18 +110,19 @@ export default function HomeScreen({ navigation }: any) {
         setEnergyTip(unread || tips[0]);
       }
 
-      // Show UI now, then load live data in background (may be slow due to Render cold start)
+      // Show UI now, then load five-minute energy data in the background.
       setLoading(false);
       setRefreshing(false);
 
-      // Fire live data separately — won't block UI
+      // Load table-backed live metrics separately so home renders quickly.
       const liveData = await fetchLiveData();
       if (liveData) {
         setBatteryLevel(liveData.battery_level ?? 0);
         setBatteryStatus(liveData.battery_status || "idle");
         setSolarEarnings(
-          Math.round(liveData.alltime_production_kwh * PESO_PER_KWH * 100) /
-            100,
+          liveData.lifetime_savings_php ??
+            Math.round(liveData.alltime_production_kwh * PESO_PER_KWH * 100) /
+              100,
         );
       }
     } catch (err) {
