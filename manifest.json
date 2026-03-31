@@ -1,0 +1,22 @@
+{
+  "background_color": "#C8E600",
+  "description": "Solviva Home & Energy Management App - Phase 1 MVP",
+  "display": "standalone",
+  "lang": "en",
+  "name": "Solviva",
+  "short_name": "Solviva",
+  "start_url": "/?utm_source=web_app_manifest",
+  "orientation": "portrait",
+  "related_applications": [
+    {
+      "platform": "itunes",
+      "id": "com.solviva.app"
+    },
+    {
+      "platform": "play",
+      "url": "http://play.google.com/store/apps/details?id=com.solviva.app",
+      "id": "com.solviva.app"
+    }
+  ],
+  "prefer_related_applications": true
+}
