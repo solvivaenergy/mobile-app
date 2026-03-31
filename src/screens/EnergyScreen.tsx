@@ -84,11 +84,10 @@ export default function EnergyScreen() {
 
   const formatReadingTime = (ts: string) => {
     const d = new Date(ts);
-    // Directly add 8 hours to the absolute UTC epoch time
-    const gmt8 = new Date(d.getTime() + 8 * 60 * 60 * 1000);
 
-    const hour = gmt8.getUTCHours();
-    const min = gmt8.getUTCMinutes();
+    // Removed the manual +8 hours logic. It now reads local system time.
+    const hour = d.getHours();
+    const min = d.getMinutes();
     const suffix = hour >= 12 ? "PM" : "AM";
     const h12 = hour % 12 || 12;
 
@@ -98,35 +97,34 @@ export default function EnergyScreen() {
 
   const getDisplayData = () => {
     if (timeRange === "today") {
-      // Use hourly buckets built from five-minute table rows.
-      // if (liveData?.today_hourly && liveData.today_hourly.length > 0) {
-      //   return {
-      //     labels: liveData.today_hourly.map((b) => formatHour(b.hour)),
-      //     production: liveData.today_hourly.map((b) => b.production_kwh),
-      //     consumption: liveData.today_hourly.map((b) => b.consumption_kwh),
-      //   };
-      // }
       if (liveData?.today_hourly && liveData.today_hourly.length > 0) {
-        // Get current hour in GMT+8
-        const now = new Date();
-        const currentGmt8Hour = (now.getUTCHours() + 8) % 24;
+        // 1. Define the 6 intervals (4 hours each)
+        const bucketLabels = ["12 AM", "4 AM", "8 AM", "12 PM", "4 PM", "8 PM"];
+        const bucketProd = [0, 0, 0, 0, 0, 0];
+        const bucketCons = [0, 0, 0, 0, 0, 0];
 
-        // Filter out buckets whose end hour is greater than the current hour
-        const completeBuckets = liveData.today_hourly.filter(
-          (b) => b.hour <= currentGmt8Hour,
-        );
+        // 2. Sum up the hourly data into their respective 4-hour buckets
+        liveData.today_hourly.forEach((b) => {
+          const bucketIndex = Math.floor(b.hour / 4);
 
-        if (completeBuckets.length > 0) {
-          return {
-            labels: completeBuckets.map((b) => formatHour(b.hour)),
-            production: completeBuckets.map((b) => b.production_kwh),
-            consumption: completeBuckets.map((b) => b.consumption_kwh),
-          };
-        }
+          // Safety check to ensure we only map to the 6 buckets (index 0-5)
+          if (bucketIndex >= 0 && bucketIndex < 6) {
+            bucketProd[bucketIndex] += Number(b.production_kwh) || 0;
+            bucketCons[bucketIndex] += Number(b.consumption_kwh) || 0;
+          }
+        });
+
+        // 3. Return the full array without slicing so it always shows up to 8 PM
+        return {
+          labels: bucketLabels,
+          production: bucketProd.map((v) => Math.round(v * 100) / 100),
+          consumption: bucketCons.map((v) => Math.round(v * 100) / 100),
+        };
       }
       return { labels: ["No data"], production: [0], consumption: [0] };
     }
 
+    // --- RESTORED 4 WEEKS LOGIC ---
     if (timeRange === "4weeks") {
       const { labels, mondayEpochs } = getFourWeekMondays();
       const prod = [0, 0, 0, 0];
@@ -154,21 +152,7 @@ export default function EnergyScreen() {
 
       return { labels, production: prod, consumption: cons };
     }
-
-    // Default: 7 complete days — yesterday back to 7 days ago
-    // const dayLabels: string[] = [];
-    // const prod: number[] = [];
-    // const cons: number[] = [];
-    // for (let i = 7; i >= 1; i--) {
-    //   const d = new Date(Date.now() - i * 86400000);
-    //   const utcMs = d.getTime() + d.getTimezoneOffset() * 60000;
-    //   const gmt8 = new Date(utcMs + 8 * 3600000);
-    //   const mm = String(gmt8.getUTCMonth() + 1).padStart(2, "0");
-    //   const dd = String(gmt8.getUTCDate()).padStart(2, "0");
-    //   dayLabels.push(`${mm}/${dd}`);
-    //   prod.push(0);
-    //   cons.push(0);
-    // }
+    // ------------------------------
 
     // Default: 7 complete days — yesterday back to 7 days ago
     const dayLabels: string[] = [];
@@ -177,11 +161,10 @@ export default function EnergyScreen() {
     for (let i = 7; i >= 1; i--) {
       const d = new Date(Date.now() - i * 86400000);
 
-      // Directly add 8 hours to the absolute UTC epoch time
-      const gmt8 = new Date(d.getTime() + 8 * 3600000);
+      // Removed manual +8 offset; directly grabbing local Month/Date
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
 
-      const mm = String(gmt8.getUTCMonth() + 1).padStart(2, "0");
-      const dd = String(gmt8.getUTCDate()).padStart(2, "0");
       dayLabels.push(`${mm}/${dd}`);
       prod.push(0);
       cons.push(0);

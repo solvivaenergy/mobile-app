@@ -51,27 +51,23 @@ export type LiveData = {
 const normalizeDateInput = (value: string | Date): Date =>
   value instanceof Date ? value : new Date(value);
 
-const toUtcMs = (date: Date): number =>
-  date.getTime() + date.getTimezoneOffset() * MINUTE_MS;
-
-const toGmt8WallClock = (date: Date): Date =>
-  new Date(toUtcMs(date) + GMT8_OFFSET_MINUTES * MINUTE_MS);
-
+// Replace the old getGmt8Parts logic with this:
 const getGmt8Parts = (value: string | Date) => {
-  const wallClock = toGmt8WallClock(normalizeDateInput(value));
+  const date = normalizeDateInput(value);
   return {
-    year: wallClock.getUTCFullYear(),
-    month: wallClock.getUTCMonth(),
-    day: wallClock.getUTCDate(),
-    hour: wallClock.getUTCHours(),
+    year: date.getFullYear(),
+    month: date.getMonth(),
+    day: date.getDate(),
+    hour: date.getHours(), // Reads local system hour
   };
 };
 
+// Replace the old getStartOfGmt8Day logic with this:
 const getStartOfGmt8Day = (value: string | Date): Date => {
-  const { year, month, day } = getGmt8Parts(value);
-  return new Date(Date.UTC(year, month, day) - GMT8_OFFSET_MINUTES * MINUTE_MS);
+  const date = normalizeDateInput(value);
+  // Sets time to 00:00:00 local time
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 };
-
 const round = (value: number, decimals = 1) => {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
@@ -128,7 +124,7 @@ export const fetchLiveData = async (): Promise<LiveData | null> => {
           .from("energy_readings_five_minutes")
           .select("lifetime_earning")
           .eq("user_id", user.id)
-          .order("lifetime_earning", { ascending: false })
+          .order("timestamp", { ascending: false })
           .limit(1)
           .maybeSingle(),
       ]);

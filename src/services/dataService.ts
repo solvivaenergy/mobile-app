@@ -1,34 +1,29 @@
 import { supabase } from './supabase';
 
-const GMT8_TIME_ZONE = 'Asia/Manila';
-const GMT8_OFFSET_MINUTES = 8 * 60;
-const MINUTE_MS = 60 * 1000;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const normalizeDateInput = (value: string | Date): Date =>
   value instanceof Date ? value : new Date(value);
 
-const toUtcMs = (date: Date): number =>
-  date.getTime() + date.getTimezoneOffset() * MINUTE_MS;
-
-const toGmt8WallClock = (date: Date): Date =>
-  new Date(toUtcMs(date) + GMT8_OFFSET_MINUTES * MINUTE_MS);
-
+// We keep the "Gmt8" naming so we don't break imports in other files, 
+// but it now natively relies on the correct system time without manual shifting.
 const getGmt8Parts = (value: string | Date) => {
-  const wallClock = toGmt8WallClock(normalizeDateInput(value));
+  const date = normalizeDateInput(value);
   return {
-    year: wallClock.getUTCFullYear(),
-    month: wallClock.getUTCMonth(),
-    day: wallClock.getUTCDate(),
-    weekday: wallClock.getUTCDay(),
-    hour: wallClock.getUTCHours(),
-    minute: wallClock.getUTCMinutes(),
+    year: date.getFullYear(),
+    month: date.getMonth(),
+    day: date.getDate(),
+    weekday: date.getDay(),
+    hour: date.getHours(),
+    minute: date.getMinutes(),
   };
 };
 
 const getStartOfGmt8Day = (value: string | Date): Date => {
-  const { year, month, day } = getGmt8Parts(value);
-  return new Date(Date.UTC(year, month, day) - GMT8_OFFSET_MINUTES * MINUTE_MS);
+  const date = normalizeDateInput(value);
+  // Sets the time to 00:00:00.000 in the local system timezone
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 };
 
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

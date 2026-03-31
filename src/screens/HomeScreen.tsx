@@ -13,15 +13,14 @@ import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
   fetchUserProfile,
   fetchWeeklyReadings,
-  fetchUpcomingPayment,
+  // fetchUpcomingPayment,
   fetchBillingRecords,
   fetchReferrals,
   fetchEnergyTips,
   formatPeso,
   formatDate,
-  isPastDateInGmt8,
 } from "../services/dataService";
-import { fetchHomeLiveData } from "../services/apiService";
+import { fetchLiveData } from "../services/apiService";
 
 const { width } = Dimensions.get("window");
 
@@ -45,17 +44,19 @@ export default function HomeScreen({ navigation }: any) {
   const loadData = useCallback(async () => {
     try {
       // Load fast Supabase data first so the UI renders quickly
-      const [profile, weeklyData, payment, billing, referrals, tips, liveData] =
+      // const [profile, weeklyData, payment, billing, referrals, tips, liveData] =
+      const [profile, weeklyData, billing, referrals, tips, liveData] =
         await Promise.all([
           fetchUserProfile(),
           fetchWeeklyReadings(),
-          fetchUpcomingPayment(),
+          // fetchUpcomingPayment(),
           fetchBillingRecords(),
           fetchReferrals(),
           fetchEnergyTips(),
-          fetchHomeLiveData(),
+          fetchLiveData(),
         ]);
 
+      console.log("HomeScreen profile:", profile);
       if (profile) setUserName(profile.full_name);
 
       if (weeklyData.length > 0) {
@@ -72,14 +73,14 @@ export default function HomeScreen({ navigation }: any) {
         setWeekSavings(Math.round(prod * PESO_PER_KWH * 100) / 100);
       }
 
-      if (payment) {
-        setUpcomingPayment({
-          type: payment.payment_type === "rto" ? "Rent-to-Own" : "Maintenance",
-          amount: Number(payment.amount_php),
-          dueDate: payment.due_date,
-          status: isPastDateInGmt8(payment.due_date) ? "Overdue" : "Due Soon",
-        });
-      }
+      // if (payment) {
+      //   setUpcomingPayment({
+      //     type: payment.payment_type === "rto" ? "Rent-to-Own" : "Maintenance",
+      //     amount: Number(payment.amount_php),
+      //     dueDate: payment.due_date,
+      //     status: isPastDateInGmt8(payment.due_date) ? "Overdue" : "Due Soon",
+      //   });
+      // }
 
       // Build transactions from billing records
       if (billing) {
