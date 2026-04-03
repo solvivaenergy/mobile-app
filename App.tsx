@@ -2,7 +2,13 @@ import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar } from "expo-status-bar";
-import { Text, View, StyleSheet, ActivityIndicator } from "react-native";
+import {
+  Text,
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  Platform,
+} from "react-native";
 import { Session } from "@supabase/supabase-js";
 import { supabase } from "./src/services/supabase";
 
@@ -73,8 +79,8 @@ export default function App() {
               backgroundColor: "#FFFFFF",
               borderTopWidth: 1,
               borderTopColor: "#E0E0E0",
-              height: 80,
-              paddingBottom: 16,
+              height: Platform.OS === "web" ? 60 : 80,
+              paddingBottom: Platform.OS === "web" ? 8 : 16,
               paddingTop: 8,
               elevation: 10,
               shadowColor: "#000",

@@ -27,7 +27,10 @@
       "enabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "Solviva"
     },
     "extra": {
       "SUPABASE_URL": "https://kzsocvzhbgtfyksrjmvk.supabase.co",

@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: Spacing.lg,
-    paddingTop: 60,
+    paddingTop: Platform.OS === "web" ? Spacing.lg : 60,
     paddingBottom: Spacing.md,
     backgroundColor: "#d2ff1e",
   },
