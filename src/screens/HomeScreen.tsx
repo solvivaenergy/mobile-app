@@ -57,7 +57,6 @@ export default function HomeScreen({ navigation }: any) {
           fetchLiveData(),
         ]);
 
-      console.log("HomeScreen profile:", profile);
       if (profile) setUserName(profile.full_name);
 
       if (weeklyData.length > 0) {

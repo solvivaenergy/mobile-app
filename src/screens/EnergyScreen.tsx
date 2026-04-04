@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
@@ -99,7 +100,14 @@ export default function EnergyScreen() {
     if (timeRange === "today") {
       if (liveData?.today_hourly && liveData.today_hourly.length > 0) {
         // 1. Define the 6 intervals (4 hours each)
-        const bucketLabels = ["12 AM", "4 AM", "8 AM", "12 PM", "4 PM", "8 PM"];
+        const bucketLabels = [
+          "12MN-4AM",
+          "4AM-8AM",
+          "8AM-12PM",
+          "12PM-4PM",
+          "4PM-8PM",
+          "8PM-12MN",
+        ];
         const bucketProd = [0, 0, 0, 0, 0, 0];
         const bucketCons = [0, 0, 0, 0, 0, 0];
 
@@ -294,7 +302,18 @@ export default function EnergyScreen() {
           {showConsumption ? "Production vs Consumption" : "Production"}
         </Text>
         <View style={styles.chartCard}>
-          <View style={styles.chartPlaceholder}>
+          {/* <View style={styles.chartPlaceholder}> */}
+          <View
+            style={[
+              styles.chartPlaceholder,
+              timeRange === "today" &&
+                Platform.OS !== "web" && {
+                  height: 140,
+                  paddingBottom: Spacing.md,
+                  overflow: "visible",
+                },
+            ]}
+          >
             {(() => {
               const maxVal = Math.max(
                 ...chartProduction,
@@ -328,7 +347,25 @@ export default function EnergyScreen() {
                       />
                     )}
                   </View>
-                  <Text style={styles.barLabel}>{label}</Text>
+                  {/* <Text style={styles.barLabel}>{label}</Text> */}
+                  <Text
+                    style={[
+                      styles.barLabel,
+                      timeRange === "today" &&
+                        Platform.OS !== "web" && {
+                          marginTop: 12,
+                          fontSize: 9,
+                          textAlign: "center",
+                          width: 48,
+                          transform: [
+                            { translateX: 0 }, // Shifts the text left to align with the bar
+                            { rotate: "-45deg" },
+                          ],
+                        },
+                    ]}
+                  >
+                    {label}
+                  </Text>
                 </View>
               ));
             })()}
