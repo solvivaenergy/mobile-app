@@ -27,7 +27,7 @@
       "enabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/icon.png",
       "bundler": "metro",
       "output": "single",
       "name": "Solviva"
