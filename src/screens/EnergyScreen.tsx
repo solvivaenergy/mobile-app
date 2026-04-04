@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Pressable,
 } from "react-native";
 import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
@@ -34,6 +35,7 @@ export default function EnergyScreen() {
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
   const [liveData, setLiveData] = useState<LiveData | null>(null);
+  const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -282,7 +284,10 @@ export default function EnergyScreen() {
               styles.timeButton,
               timeRange === key && styles.timeButtonActive,
             ]}
-            onPress={() => setTimeRange(key)}
+            onPress={() => {
+              setTimeRange(key);
+              setActiveBarIndex(null);
+            }}
           >
             <Text
               style={[
@@ -310,7 +315,6 @@ export default function EnergyScreen() {
                 Platform.OS !== "web" && {
                   height: 140,
                   paddingBottom: Spacing.md,
-                  overflow: "visible",
                 },
             ]}
           >
@@ -320,54 +324,98 @@ export default function EnergyScreen() {
                 ...(showConsumption ? chartConsumption : []),
                 1,
               );
-              const maxBarHeight = 100; // px budget for bars
+              const maxBarHeight = 100;
               const scale = maxBarHeight / maxVal;
-              return chartLabels.map((label, index) => (
-                <View key={label} style={styles.barGroup}>
-                  <View style={styles.barContainer}>
-                    <View
-                      style={[
-                        styles.barProduction,
-                        {
-                          height: Math.max(2, chartProduction[index] * scale),
-                        },
-                      ]}
-                    />
-                    {showConsumption && (
-                      <View
-                        style={[
-                          styles.barConsumption,
-                          {
-                            height: Math.max(
-                              2,
-                              chartConsumption[index] * scale,
-                            ),
-                          },
-                        ]}
-                      />
-                    )}
-                  </View>
-                  {/* <Text style={styles.barLabel}>{label}</Text> */}
-                  <Text
+
+              return chartLabels.map((label, index) => {
+                // 1. Calculate exact pixel heights for the bars
+                const prodHeight = Math.max(2, chartProduction[index] * scale);
+                const consHeight = showConsumption
+                  ? Math.max(2, chartConsumption[index] * scale)
+                  : 0;
+
+                // 2. Find the tallest bar in this specific group
+                const tallestBar = Math.max(prodHeight, consHeight);
+
+                return (
+                  <Pressable
+                    key={label}
                     style={[
-                      styles.barLabel,
-                      timeRange === "today" &&
-                        Platform.OS !== "web" && {
-                          marginTop: 12,
-                          fontSize: 9,
-                          textAlign: "center",
-                          width: 48,
-                          transform: [
-                            { translateX: 0 }, // Shifts the text left to align with the bar
-                            { rotate: "-45deg" },
-                          ],
-                        },
+                      styles.barGroup,
+                      // Pulls the currently active bar group (and its tooltip) to the front!
+                      activeBarIndex === index && {
+                        zIndex: 100,
+                        elevation: 10,
+                      },
                     ]}
+                    onPress={() =>
+                      setActiveBarIndex(index === activeBarIndex ? null : index)
+                    }
+                    // @ts-ignore
+                    onHoverIn={() =>
+                      Platform.OS === "web" && setActiveBarIndex(index)
+                    }
+                    onHoverOut={() =>
+                      Platform.OS === "web" && setActiveBarIndex(null)
+                    }
                   >
-                    {label}
-                  </Text>
-                </View>
-              ));
+                    {/* The Bars & Tooltip Container */}
+                    <View style={styles.barContainer}>
+                      {/* The Tooltip Bubble (Now INSIDE barContainer) */}
+                      {activeBarIndex === index && (
+                        <View
+                          style={[
+                            styles.tooltipContainer,
+                            { bottom: tallestBar + 8 }, // Dynamically hovers exactly 8px above the tallest bar!
+                          ]}
+                          pointerEvents="none"
+                        >
+                          <Text style={styles.tooltipText} numberOfLines={1}>
+                            ☀️ {chartProduction[index]} kWh
+                          </Text>
+                          {showConsumption && (
+                            <Text style={styles.tooltipText} numberOfLines={1}>
+                              ⚡ {chartConsumption[index]} kWh
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
+                      {/* The Bars */}
+                      <View
+                        style={[styles.barProduction, { height: prodHeight }]}
+                      />
+                      {showConsumption && (
+                        <View
+                          style={[
+                            styles.barConsumption,
+                            { height: consHeight },
+                          ]}
+                        />
+                      )}
+                    </View>
+
+                    {/* The X-Axis Label */}
+                    <Text
+                      style={[
+                        styles.barLabel,
+                        timeRange === "today" &&
+                          Platform.OS !== "web" && {
+                            marginTop: 12,
+                            width: 48,
+                            fontSize: 9,
+                            transform: [
+                              { translateX: 2 },
+                              { rotate: "-45deg" },
+                            ],
+                          },
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              });
             })()}
           </View>
           <View style={styles.chartLegend}>
@@ -689,7 +737,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     height: 130,
     paddingBottom: Spacing.sm,
-    overflow: "hidden",
+    overflow: "visible",
   },
   barGroup: { alignItems: "center" },
   barContainer: {
@@ -836,5 +884,32 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.md,
     fontWeight: "600",
     color: Colors.text,
+  },
+  tooltipContainer: {
+    position: "absolute",
+    left: "50%",
+    // transform: [{ translateX: -40 }],
+    transform: [{ translateX: -55 }],
+    backgroundColor: "rgba(33, 33, 33, 0.95)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    // minWidth: 80,
+    width: 110,
+  },
+  tooltipText: {
+    color: Colors.textLight,
+    fontSize: FontSizes.xs,
+    fontWeight: "bold",
+    marginBottom: 2,
+    textAlign: "center",
   },
 });

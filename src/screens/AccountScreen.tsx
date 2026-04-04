@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
@@ -47,17 +48,26 @@ export default function AccountScreen() {
     loadData();
   };
 
-  const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          await supabase.auth.signOut();
+  const handleLogout = async () => {
+    if (Platform.OS === "web") {
+      // Use the standard browser confirmation dialog for the web
+      const confirmed = window.confirm("Are you sure you want to log out?");
+      if (confirmed) {
+        await supabase.auth.signOut();
+      }
+    } else {
+      // Keep the native Alert with custom buttons for iOS/Android
+      Alert.alert("Log Out", "Are you sure you want to log out?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            await supabase.auth.signOut();
+          },
         },
-      },
-    ]);
+      ]);
+    }
   };
 
   const menuItems = [
