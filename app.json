@@ -30,15 +30,21 @@
       "favicon": "./assets/icon.png",
       "bundler": "metro",
       "output": "single",
-      "name": "Solviva"
+      "name": "Solviva Energy"
     },
     "experiments": {
       "baseUrl": "/mobile-app"
     },
     "extra": {
       "SUPABASE_URL": "https://kzsocvzhbgtfyksrjmvk.supabase.co",
-      "SUPABASE_ANON_KEY": "dummy-key"
+      "SUPABASE_ANON_KEY": "dummy-key",
+      "eas": {
+        "projectId": "f73809fc-5df2-4987-ae0c-a7d93ccc678a"
+      }
     },
-    "plugins": ["expo-asset"]
+    "plugins": [
+      "expo-asset"
+    ],
+    "owner": "solviva-energy"
   }
 }

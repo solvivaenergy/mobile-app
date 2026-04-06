@@ -71,7 +71,7 @@ export default function App() {
   return (
     <>
       <StatusBar style="light" />
-      <NavigationContainer>
+      <NavigationContainer documentTitle={{ enabled: false }}>
         <Tab.Navigator
           screenOptions={{
             headerShown: false,
