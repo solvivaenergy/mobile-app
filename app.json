@@ -30,7 +30,9 @@
       "favicon": "./assets/icon.png",
       "bundler": "metro",
       "output": "single",
-      "name": "Solviva",
+      "name": "Solviva"
+    },
+    "experiments": {
       "baseUrl": "/mobile-app"
     },
     "extra": {
