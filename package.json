@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Solviva Home & Energy Management App - Phase 1 MVP",
   "main": "node_modules/expo/AppEntry.js",
+  "homepage": "/mobile-app/",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
