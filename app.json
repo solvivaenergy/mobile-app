@@ -30,7 +30,8 @@
       "favicon": "./assets/icon.png",
       "bundler": "metro",
       "output": "single",
-      "name": "Solviva"
+      "name": "Solviva",
+      "baseUrl": "/mobile-app"
     },
     "extra": {
       "SUPABASE_URL": "https://kzsocvzhbgtfyksrjmvk.supabase.co",
