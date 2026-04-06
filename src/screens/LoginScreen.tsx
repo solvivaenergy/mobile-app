@@ -83,81 +83,85 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.inner}>
-        {/* Logo / Brand */}
-        <View style={styles.brandContainer}>
-          <Image
-            source={{
-              uri: "https://cdn.prod.website-files.com/64a21c09e7f60775e314653f/67e0fcca9b9826056a9e8b2f_Group%2061.png",
-            }}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.brandTagline}>Smart Solar Energy Management</Text>
-        </View>
-
-        {/* Form */}
-        <View style={styles.formContainer}>
-          <Text style={styles.formTitle}>
-            {isSignUp ? "Create Account" : "Welcome Back"}
-          </Text>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your Email"
-              placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
+        <View style={styles.content}>
+          {/* Logo / Brand */}
+          <View style={styles.brandContainer}>
+            <Image
+              source={{
+                uri: "https://cdn.prod.website-files.com/64a21c09e7f60775e314653f/67e0fcca9b9826056a9e8b2f_Group%2061.png",
+              }}
+              style={styles.logo}
+              resizeMode="contain"
             />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              returnKeyType="go"
-              onSubmitEditing={isSignUp ? handleSignUp : handleLogin}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.primaryButton, loading && styles.buttonDisabled]}
-            onPress={isSignUp ? handleSignUp : handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>
-                {isSignUp ? "Sign Up" : "Log In"}
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => setIsSignUp(!isSignUp)}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {isSignUp
-                ? "Already have an account? Log In"
-                : "Don't have an account? Sign Up"}
+            <Text style={styles.brandTagline}>
+              Smart Solar Energy Management
             </Text>
-          </TouchableOpacity>
-        </View>
+          </View>
 
-        {/* Footer */}
-        <Text style={styles.footer}>Powered by Solviva Energy</Text>
+          {/* Form */}
+          <View style={styles.formContainer}>
+            <Text style={styles.formTitle}>
+              {isSignUp ? "Create Account" : "Welcome Back"}
+            </Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your Email"
+                placeholderTextColor="#999"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your password"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                returnKeyType="go"
+                onSubmitEditing={isSignUp ? handleSignUp : handleLogin}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, loading && styles.buttonDisabled]}
+              onPress={isSignUp ? handleSignUp : handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {isSignUp ? "Sign Up" : "Log In"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => setIsSignUp(!isSignUp)}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {isSignUp
+                  ? "Already have an account? Log In"
+                  : "Don't have an account? Sign Up"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Footer */}
+          <Text style={styles.footer}>Powered by Solviva Energy</Text>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -171,7 +175,16 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     justifyContent: "center",
+  },
+  content: {
+    width: "100%",
     paddingHorizontal: Spacing.lg,
+    ...Platform.select({
+      web: {
+        maxWidth: 520,
+        alignSelf: "center",
+      },
+    }),
   },
   brandContainer: {
     alignItems: "center",
