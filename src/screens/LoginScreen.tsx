@@ -19,6 +19,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -27,6 +29,7 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    setErrorMessage("");
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -34,10 +37,10 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        Alert.alert("Login Failed", error.message);
+        setErrorMessage(error.message);
       }
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Something went wrong.");
+      setErrorMessage(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
@@ -55,6 +58,7 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    setErrorMessage("");
     try {
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -62,7 +66,7 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        Alert.alert("Sign Up Failed", error.message);
+        setErrorMessage(error.message);
       } else {
         Alert.alert(
           "Account Created",
@@ -71,7 +75,7 @@ export default function LoginScreen() {
         setIsSignUp(false);
       }
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Something went wrong.");
+      setErrorMessage(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
@@ -121,17 +125,31 @@ export default function LoginScreen() {
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                placeholderTextColor="#999"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                returnKeyType="go"
-                onSubmitEditing={isSignUp ? handleSignUp : handleLogin}
-              />
+              <View style={styles.passwordRow}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#999"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  returnKeyType="go"
+                  onSubmitEditing={isSignUp ? handleSignUp : handleLogin}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Text style={styles.eyeButtonText}>
+                    {showPassword ? "Hide" : "Show"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {errorMessage ? (
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.primaryButton, loading && styles.buttonDisabled]}
@@ -236,6 +254,30 @@ const styles = StyleSheet.create({
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  passwordInput: {
+    flex: 1,
+  },
+  eyeButton: {
+    position: "absolute",
+    right: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  eyeButtonText: {
+    color: Colors.primary,
+    fontSize: FontSizes.sm,
+    fontWeight: "600",
+  },
+  errorText: {
+    color: "#D32F2F",
+    fontSize: FontSizes.sm,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
   },
   primaryButton: {
     backgroundColor: "#d2ff1e",
