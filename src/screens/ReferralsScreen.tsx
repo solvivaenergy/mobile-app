@@ -5,8 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
-  Alert,
   Share,
   ActivityIndicator,
   RefreshControl,
@@ -15,14 +13,11 @@ import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
   fetchUserProfile,
   fetchReferrals,
-  createReferral,
   formatPeso,
   formatDate,
 } from "../services/dataService";
 
 export default function ReferralsScreen() {
-  const [refereeName, setRefereeName] = useState("");
-  const [refereePhone, setRefereePhone] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [referralCode, setReferralCode] = useState("");
@@ -63,34 +58,10 @@ export default function ReferralsScreen() {
   const handleShareCode = async () => {
     try {
       await Share.share({
-        message: `Join Solviva Solar! Use my referral code ${referralCode} when you sign up. Save on electricity with solar energy! 🌞`,
+        message: `solvivaenergy.com/?Referral=${referralCode}`,
       });
     } catch (error) {
       // Share cancelled
-    }
-  };
-
-  const handleSubmitReferral = async () => {
-    if (!refereeName || !refereePhone) {
-      Alert.alert("Please fill in all fields");
-      return;
-    }
-    const result = await createReferral(
-      refereeName,
-      refereePhone,
-      referralCode,
-    );
-    if (result) {
-      Alert.alert(
-        "Referral Submitted! 🎉",
-        `Thank you for referring ${refereeName}. You'll earn ₱10,000 when they install their solar system!`,
-        [{ text: "OK" }],
-      );
-      setRefereeName("");
-      setRefereePhone("");
-      loadData(); // refresh list
-    } else {
-      Alert.alert("Error", "Failed to submit referral. Please try again.");
     }
   };
 
@@ -182,34 +153,6 @@ export default function ReferralsScreen() {
             onPress={handleShareCode}
           >
             <Text style={styles.shareButtonText}>📤 Share Link</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Submit New Referral */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Refer a Friend</Text>
-        <View style={styles.formCard}>
-          <TextInput
-            style={styles.input}
-            placeholder="Friend's Name"
-            placeholderTextColor={Colors.textSecondary}
-            value={refereeName}
-            onChangeText={setRefereeName}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Friend's Phone Number"
-            placeholderTextColor={Colors.textSecondary}
-            keyboardType="phone-pad"
-            value={refereePhone}
-            onChangeText={setRefereePhone}
-          />
-          <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleSubmitReferral}
-          >
-            <Text style={styles.submitButtonText}>Submit Referral</Text>
           </TouchableOpacity>
         </View>
       </View>

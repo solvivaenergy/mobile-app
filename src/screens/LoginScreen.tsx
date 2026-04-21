@@ -18,7 +18,6 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -38,41 +37,6 @@ export default function LoginScreen() {
 
       if (error) {
         setErrorMessage(error.message);
-      }
-    } catch (err: any) {
-      setErrorMessage(err.message || "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignUp = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password.");
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters.");
-      return;
-    }
-
-    setLoading(true);
-    setErrorMessage("");
-    try {
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-      });
-
-      if (error) {
-        setErrorMessage(error.message);
-      } else {
-        Alert.alert(
-          "Account Created",
-          "Check your email for a confirmation link, then log in.",
-        );
-        setIsSignUp(false);
       }
     } catch (err: any) {
       setErrorMessage(err.message || "Something went wrong.");
@@ -104,9 +68,7 @@ export default function LoginScreen() {
 
           {/* Form */}
           <View style={styles.formContainer}>
-            <Text style={styles.formTitle}>
-              {isSignUp ? "Create Account" : "Welcome Back"}
-            </Text>
+            <Text style={styles.formTitle}>Welcome Back</Text>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Email</Text>
@@ -134,7 +96,7 @@ export default function LoginScreen() {
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                   returnKeyType="go"
-                  onSubmitEditing={isSignUp ? handleSignUp : handleLogin}
+                  onSubmitEditing={handleLogin}
                 />
                 <TouchableOpacity
                   style={styles.eyeButton}
@@ -153,27 +115,14 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={[styles.primaryButton, loading && styles.buttonDisabled]}
-              onPress={isSignUp ? handleSignUp : handleLogin}
+              onPress={handleLogin}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.primaryButtonText}>
-                  {isSignUp ? "Sign Up" : "Log In"}
-                </Text>
+                <Text style={styles.primaryButtonText}>Log In</Text>
               )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => setIsSignUp(!isSignUp)}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {isSignUp
-                  ? "Already have an account? Log In"
-                  : "Don't have an account? Sign Up"}
-              </Text>
             </TouchableOpacity>
           </View>
 

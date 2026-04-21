@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Linking,
 } from "react-native";
 import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
@@ -110,13 +111,15 @@ export default function AccountScreen() {
     {
       icon: "📋",
       label: "Terms & Conditions",
-      onPress: () => Alert.alert("Terms", "Terms & conditions document"),
+      onPress: () =>
+        Linking.openURL(
+          "http://solvivaenergy.com/standard-terms-and-conditions",
+        ),
     },
     {
       icon: "❓",
       label: "FAQ",
-      onPress: () =>
-        Alert.alert("FAQ", "Frequently asked questions coming soon"),
+      onPress: () => Linking.openURL("https://www.solvivaenergy.com/faq"),
     },
   ];
 
