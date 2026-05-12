@@ -234,10 +234,11 @@ export default function HelpScreen() {
       const userName = user?.full_name ?? "";
       const userEmail = user?.email ?? "";
 
+      const solisId = (user as any)?.solis_station_id ?? "N/A";
       let formData: Record<string, string>;
       if (ticketType === "technical") {
         formData = {
-          "Plant-Reference-Number": "N/A",
+          "Plant-Reference-Number": solisId,
           "PV-Owner-Name": userName,
           Email: userEmail,
           Phone: contactNumber.trim() || "N/A",
@@ -302,7 +303,7 @@ export default function HelpScreen() {
     try {
       const timestamp = getGmt8Timestamp();
       const formData: Record<string, string> = {
-        "Plant-Reference-Number": "N/A",
+        "Plant-Reference-Number": (user as any)?.solis_station_id ?? "N/A",
         "PV-Owner-Name": user?.full_name ?? "",
         Email: user?.email ?? "",
         Phone: pmsContactNumber.trim() || "N/A",
