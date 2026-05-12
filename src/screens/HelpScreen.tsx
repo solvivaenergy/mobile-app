@@ -265,7 +265,7 @@ export default function HelpScreen() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Submission-Source": Platform.OS === "web" ? "web" : "mobile-app",
+          "X-Submission-Source": "mobile-app",
           "X-Platform": Platform.OS,
           "X-App-Version": "1.0.0",
         },
@@ -318,7 +318,7 @@ export default function HelpScreen() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Submission-Source": Platform.OS === "web" ? "web" : "mobile-app",
+          "X-Submission-Source": "mobile-app",
           "X-Platform": Platform.OS,
           "X-App-Version": "1.0.0",
         },
