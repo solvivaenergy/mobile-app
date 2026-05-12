@@ -650,11 +650,15 @@ export default function HelpScreen() {
                 ? ticket.stage_id[1]
                 : "New";
               const stageColor = getOdooStageColor(stageName);
-              const plainDesc = stripHtml(ticket.description ?? "");
+              // Extract "Concern Name : XYZ" from description if present
+              const rawDesc = stripHtml(ticket.description ?? "");
+              const concernMatch = rawDesc.match(/Concern Name\s*:\s*([^\n]+)/i) ||
+                rawDesc.match(/Subject\s*:\s*([^\n]+)/i);
+              const concernLabel = concernMatch ? concernMatch[1].trim() : null;
               return (
                 <View key={ticket.id} style={styles.ticketCard}>
                   <View style={styles.ticketHeader}>
-                    <Text style={styles.ticketSubject}>{ticket.name}</Text>
+                    <Text style={styles.ticketSubject} numberOfLines={2}>{ticket.name}</Text>
                     <View
                       style={[
                         styles.statusBadge,
@@ -666,9 +670,9 @@ export default function HelpScreen() {
                       </Text>
                     </View>
                   </View>
-                  {plainDesc.length > 0 && (
-                    <Text style={styles.ticketDescription} numberOfLines={2}>
-                      {plainDesc}
+                  {concernLabel && (
+                    <Text style={styles.ticketDescription} numberOfLines={1}>
+                      {concernLabel}
                     </Text>
                   )}
                   <View style={styles.ticketFooter}>
