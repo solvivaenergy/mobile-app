@@ -162,8 +162,24 @@ export default function HelpScreen() {
 
   // PMS modal
   const [showPmsModal, setShowPmsModal] = useState(false);
+  const [pmsFirstName, setPmsFirstName] = useState("");
+  const [pmsLastName, setPmsLastName] = useState("");
+  const [pmsEmail, setPmsEmail] = useState("");
   const [pmsContactNumber, setPmsContactNumber] = useState("");
-  const [pmsNotes, setPmsNotes] = useState("");
+  const [pmsSiteAddress, setPmsSiteAddress] = useState("");
+  const [pmsPrefDate, setPmsPrefDate] = useState("");
+  const [pmsPrefTime, setPmsPrefTime] = useState("");
+  const [pmsAltDate, setPmsAltDate] = useState("");
+  const [pmsPanelLocation, setPmsPanelLocation] = useState("");
+  const [pmsAccessEquipment, setPmsAccessEquipment] = useState<string[]>([]);
+  const [pmsWorkPermit, setPmsWorkPermit] = useState("");
+  const [pmsWorkPermitReqs, setPmsWorkPermitReqs] = useState("");
+  const [pmsSiteContactName, setPmsSiteContactName] = useState("");
+  const [pmsSiteContactNumber, setPmsSiteContactNumber] = useState("");
+  const [pmsAccessInstructions, setPmsAccessInstructions] = useState("");
+  const [pmsHasIssues, setPmsHasIssues] = useState("");
+  const [pmsIssueDescription, setPmsIssueDescription] = useState("");
+  const [pmsOtherRequests, setPmsOtherRequests] = useState("");
   const [pmsSubmitting, setPmsSubmitting] = useState(false);
 
   // Success modal
@@ -226,6 +242,26 @@ export default function HelpScreen() {
 
   const handleEmail = () => {
     Linking.openURL(`mailto:${supportContacts.email}`);
+  };
+
+  const openPmsModal = () => {
+    if (user) {
+      const parts = (user.full_name ?? "").trim().split(" ");
+      setPmsFirstName(parts[0] ?? "");
+      setPmsLastName(parts.slice(1).join(" "));
+      setPmsEmail(user.email ?? "");
+      setPmsContactNumber((user as any).phone ?? "");
+      setPmsSiteAddress((user as any).address ?? "");
+      setPmsSiteContactName(user.full_name ?? "");
+      setPmsSiteContactNumber((user as any).phone ?? "");
+    }
+    setShowPmsModal(true);
+  };
+
+  const toggleAccessEquipment = (item: string) => {
+    setPmsAccessEquipment((prev) =>
+      prev.includes(item) ? prev.filter((e) => e !== item) : [...prev, item],
+    );
   };
 
   const handleSubmit = async () => {
@@ -316,17 +352,74 @@ export default function HelpScreen() {
   };
 
   const handleSubmitPms = async () => {
+    const missing: string[] = [];
+    if (!pmsFirstName.trim() || !pmsLastName.trim())
+      missing.push("First and Last Name");
+    if (!pmsEmail.trim()) missing.push("Email Address");
+    if (!pmsContactNumber.trim()) missing.push("Contact Number");
+    if (!pmsSiteAddress.trim()) missing.push("Site / Installation Address");
+    if (!pmsPrefDate.trim()) missing.push("Preferred PMS Date");
+    if (!pmsPrefTime) missing.push("Preferred Time Slot");
+    if (!pmsPanelLocation) missing.push("Panel / Array Location");
+    if (pmsAccessEquipment.length === 0)
+      missing.push("Access Equipment Required");
+    if (!pmsWorkPermit) missing.push("Work Permit Required");
+    if (!pmsHasIssues) missing.push("System Condition (Section D)");
+    if (missing.length > 0) {
+      Alert.alert(
+        "Required Fields",
+        `Please complete:\n\u2022 ${missing.join("\n\u2022 ")}`,
+      );
+      return;
+    }
     setPmsSubmitting(true);
     try {
       const timestamp = getGmt8Timestamp();
+      const concernDescription = [
+        `=== PMS Questionnaire ===`,
+        `--- Section A: Client & Site ---`,
+        `Name: ${pmsFirstName} ${pmsLastName}`,
+        `Email: ${pmsEmail}`,
+        `Contact: ${pmsContactNumber}`,
+        `Site Address: ${pmsSiteAddress}`,
+        `--- Section B: Schedule ---`,
+        `Preferred Date: ${pmsPrefDate}`,
+        `Preferred Time: ${pmsPrefTime}`,
+        pmsAltDate ? `Alternative Date: ${pmsAltDate}` : null,
+        `--- Section C: Site Access ---`,
+        `Panel Location: ${pmsPanelLocation}`,
+        `Access Equipment: ${pmsAccessEquipment.join(", ")}`,
+        `Work Permit: ${pmsWorkPermit}`,
+        pmsWorkPermitReqs
+          ? `Work Permit Requirements: ${pmsWorkPermitReqs}`
+          : null,
+        pmsSiteContactName
+          ? `Site Contact: ${pmsSiteContactName} / ${pmsSiteContactNumber}`
+          : null,
+        pmsAccessInstructions
+          ? `Access Instructions: ${pmsAccessInstructions}`
+          : null,
+        `--- Section D: System Condition ---`,
+        `Issues Recently: ${pmsHasIssues}`,
+        pmsIssueDescription
+          ? `Issue Description: ${pmsIssueDescription}`
+          : null,
+        pmsOtherRequests ? `Other Requests: ${pmsOtherRequests}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
       const formData: Record<string, string> = {
         "Plant-Reference-Number": (user as any)?.solis_station_id ?? "N/A",
-        "PV-Owner-Name": user?.full_name ?? "",
-        Email: user?.email ?? "",
-        Phone: pmsContactNumber.trim() || "N/A",
+        "PV-Owner-Name": `${pmsFirstName} ${pmsLastName}`.trim(),
+        Email: pmsEmail,
+        Phone: pmsContactNumber,
         "Service-Type": "Schedule a PMS / Cleaning Appointment",
-        "Concern-Description": pmsNotes.trim() || "PMS Appointment Request",
-        form_name: "solviva-support-technical-20260512",
+        "Concern-Description": concernDescription,
+        "Site-Address": pmsSiteAddress,
+        "Preferred-Date": pmsPrefDate,
+        "Preferred-Time": pmsPrefTime,
+        form_name: "solviva-pms-questionnaire-20260330",
         "ticket-type": "technical",
         "submission-timestamp": timestamp,
       };
@@ -344,11 +437,27 @@ export default function HelpScreen() {
 
       if (response.ok) {
         setShowPmsModal(false);
+        setPmsFirstName("");
+        setPmsLastName("");
+        setPmsEmail("");
         setPmsContactNumber("");
-        setPmsNotes("");
+        setPmsSiteAddress("");
+        setPmsPrefDate("");
+        setPmsPrefTime("");
+        setPmsAltDate("");
+        setPmsPanelLocation("");
+        setPmsAccessEquipment([]);
+        setPmsWorkPermit("");
+        setPmsWorkPermitReqs("");
+        setPmsSiteContactName("");
+        setPmsSiteContactNumber("");
+        setPmsAccessInstructions("");
+        setPmsHasIssues("");
+        setPmsIssueDescription("");
+        setPmsOtherRequests("");
         setSuccessMessage({
           title: "PMS Request Submitted!",
-          body: "Your appointment request has been submitted. Our team will contact you to confirm your schedule.",
+          body: "Your appointment request has been submitted. Our Aftersales team will reach out within 2 business days to confirm your schedule.",
         });
         setShowSuccessModal(true);
         loadData();
@@ -426,7 +535,7 @@ export default function HelpScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.contactCard, { backgroundColor: "#E8F5E9" }]}
-              onPress={() => setShowPmsModal(true)}
+              onPress={openPmsModal}
             >
               <Text style={styles.contactIcon}>🔧</Text>
               <Text style={styles.contactLabel}>PMS</Text>
@@ -772,68 +881,393 @@ export default function HelpScreen() {
             contentContainerStyle={{ paddingBottom: 40 }}
           >
             <Text style={styles.pmsTitle}>
-              Thank you for considering our Preventive Maintenance Service (PMS)
-              for your Solar PV System.
+              Please fill in all required fields (*). Your responses help our
+              team prepare for a smooth and efficient maintenance visit.
             </Text>
-            <View style={styles.pmsPriceCard}>
-              <Text style={styles.pmsPriceLabel}>Pricing</Text>
-              <Text style={styles.pmsPriceItem}>
-                {"\u2022"} Up to 10 kWp \u2014 starting at \u20b110,000 VAT
-                inclusive
-              </Text>
-              <Text style={styles.pmsPriceItem}>
-                {"\u2022"} Above 10 kWp (up to 100 kWp) \u2014 \u20b1900 per kWp
-              </Text>
-              <Text style={styles.pmsNote}>
-                Prices are estimates and may vary based on location, system
-                size, and specific requirements.
-              </Text>
+
+            {/* Section A */}
+            <Text style={styles.pmsSectionHeader}>
+              Section A: Client &amp; Site Information
+            </Text>
+            {user && (
+              <View
+                style={[styles.userInfoBanner, { marginBottom: Spacing.md }]}
+              >
+                <Text style={styles.userInfoText}>
+                  \u2713 Auto-filled from your profile \u2014 edit any field if
+                  needed.
+                </Text>
+              </View>
+            )}
+            <View style={styles.pmsRow}>
+              <View
+                style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}
+              >
+                <Text style={styles.fieldLabel}>First Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pmsFirstName}
+                  onChangeText={setPmsFirstName}
+                  placeholder="First name"
+                  placeholderTextColor={Colors.textSecondary}
+                />
+              </View>
+              <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.fieldLabel}>Last Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pmsLastName}
+                  onChangeText={setPmsLastName}
+                  placeholder="Last name"
+                  placeholderTextColor={Colors.textSecondary}
+                />
+              </View>
             </View>
-
-            <Text style={styles.pmsSectionLabel}>What PMS Includes:</Text>
-            {[
-              "Solar module cleaning and inspection",
-              "Thermal scanning",
-              "Inverter and panel board checks",
-              "Grounding system assessment",
-              "Monitoring device inspection",
-              "System safety and structural integrity check",
-            ].map((item) => (
-              <Text key={item} style={styles.pmsListItem}>
-                \u2713 {item}
-              </Text>
-            ))}
-
-            <View style={[styles.inputContainer, { marginTop: Spacing.lg }]}>
-              <Text style={styles.fieldLabel}>
-                Contact Number{" "}
-                <Text style={styles.fieldOptional}>(optional)</Text>
-              </Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>Email Address *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your contact number"
+                value={pmsEmail}
+                onChangeText={setPmsEmail}
+                placeholder="Email address"
                 placeholderTextColor={Colors.textSecondary}
-                keyboardType="phone-pad"
-                value={pmsContactNumber}
-                onChangeText={setPmsContactNumber}
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
             </View>
-
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>Contact Number *</Text>
+              <TextInput
+                style={styles.input}
+                value={pmsContactNumber}
+                onChangeText={setPmsContactNumber}
+                placeholder="+63..."
+                placeholderTextColor={Colors.textSecondary}
+                keyboardType="phone-pad"
+              />
+            </View>
             <View style={styles.inputContainer}>
               <Text style={styles.fieldLabel}>
-                Additional Notes{" "}
-                <Text style={styles.fieldOptional}>(optional)</Text>
+                Site / Installation Address *
               </Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Any specific concerns or preferred schedule..."
+                value={pmsSiteAddress}
+                onChangeText={setPmsSiteAddress}
+                placeholder="Full address of the solar installation"
                 placeholderTextColor={Colors.textSecondary}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
-                value={pmsNotes}
-                onChangeText={setPmsNotes}
               />
+            </View>
+
+            {/* Section B */}
+            <Text style={styles.pmsSectionHeader}>
+              Section B: Preferred Schedule
+            </Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Preferred PMS Date *{" "}
+                <Text style={styles.fieldOptional}>
+                  (at least 10 days from today)
+                </Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                value={pmsPrefDate}
+                onChangeText={setPmsPrefDate}
+                placeholder="MM/DD/YYYY"
+                placeholderTextColor={Colors.textSecondary}
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>Preferred Time Slot *</Text>
+              <View style={styles.pmsOptionRow}>
+                {[
+                  {
+                    label: "Morning\n(8 AM \u2013 12 PM)",
+                    val: "Morning (8:00 AM \u2013 12:00 PM)",
+                  },
+                  {
+                    label: "Afternoon\n(1 PM \u2013 5 PM)",
+                    val: "Afternoon (1:00 PM \u2013 5:00 PM)",
+                  },
+                  {
+                    label: "Flexible\n(any time)",
+                    val: "Flexible \u2014 any time works",
+                  },
+                ].map(({ label, val }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[
+                      styles.pmsOptionBtn,
+                      pmsPrefTime === val && styles.pmsOptionBtnSelected,
+                    ]}
+                    onPress={() => setPmsPrefTime(val)}
+                  >
+                    <Text
+                      style={[
+                        styles.pmsOptionBtnText,
+                        pmsPrefTime === val && styles.pmsOptionBtnTextSelected,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Alternative Date{" "}
+                <Text style={styles.fieldOptional}>(optional)</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                value={pmsAltDate}
+                onChangeText={setPmsAltDate}
+                placeholder="MM/DD/YYYY"
+                placeholderTextColor={Colors.textSecondary}
+              />
+            </View>
+
+            {/* Section C */}
+            <Text style={styles.pmsSectionHeader}>Section C: Site Access</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>Panel / Array Location *</Text>
+              <View style={styles.pmsOptionRow}>
+                {[
+                  {
+                    label: "Rooftop \u2014 single storey\n(\u2264 4 meters)",
+                    val: "Rooftop \u2014 single storey (\u2264 4 meters)",
+                  },
+                  {
+                    label: "Rooftop \u2014 multi-storey\n(> 4 meters)",
+                    val: "Rooftop \u2014 multi-storey (> 4 meters)",
+                  },
+                ].map(({ label, val }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[
+                      styles.pmsOptionBtn,
+                      pmsPanelLocation === val && styles.pmsOptionBtnSelected,
+                    ]}
+                    onPress={() => setPmsPanelLocation(val)}
+                  >
+                    <Text
+                      style={[
+                        styles.pmsOptionBtnText,
+                        pmsPanelLocation === val &&
+                          styles.pmsOptionBtnTextSelected,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Access Equipment Required *{" "}
+                <Text style={styles.fieldOptional}>
+                  (select all that apply)
+                </Text>
+              </Text>
+              <View style={styles.pmsOptionRow}>
+                {[
+                  "No special equipment needed",
+                  "Ladder (client to provide)",
+                  "Scaffolding required",
+                  "Others",
+                ].map((opt) => (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[
+                      styles.pmsOptionBtn,
+                      pmsAccessEquipment.includes(opt) &&
+                        styles.pmsOptionBtnSelected,
+                    ]}
+                    onPress={() => toggleAccessEquipment(opt)}
+                  >
+                    <Text
+                      style={[
+                        styles.pmsOptionBtnText,
+                        pmsAccessEquipment.includes(opt) &&
+                          styles.pmsOptionBtnTextSelected,
+                      ]}
+                    >
+                      {opt}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>Work Permit Required? *</Text>
+              {[
+                "No \u2014 our team can enter freely",
+                "Yes \u2014 I will arrange the work permit",
+                "Yes \u2014 please coordinate with the HOA",
+                "Not sure \u2014 please advise",
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[
+                    styles.pmsRadioRow,
+                    pmsWorkPermit === opt && styles.pmsRadioRowSelected,
+                  ]}
+                  onPress={() => setPmsWorkPermit(opt)}
+                >
+                  <View
+                    style={[
+                      styles.pmsRadioDot,
+                      pmsWorkPermit === opt && styles.pmsRadioDotSelected,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.pmsRadioText,
+                      pmsWorkPermit === opt && styles.pmsRadioTextSelected,
+                    ]}
+                  >
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {pmsWorkPermit.startsWith("Yes") && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.fieldLabel}>Work Permit Requirements</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={pmsWorkPermitReqs}
+                  onChangeText={setPmsWorkPermitReqs}
+                  placeholder="Describe the requirements..."
+                  placeholderTextColor={Colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            )}
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Site Contact Person{" "}
+                <Text style={styles.fieldOptional}>
+                  (if different from above)
+                </Text>
+              </Text>
+              <TextInput
+                style={[styles.input, { marginBottom: 8 }]}
+                value={pmsSiteContactName}
+                onChangeText={setPmsSiteContactName}
+                placeholder="Last Name, First Name"
+                placeholderTextColor={Colors.textSecondary}
+              />
+              <TextInput
+                style={styles.input}
+                value={pmsSiteContactNumber}
+                onChangeText={setPmsSiteContactNumber}
+                placeholder="Contact number"
+                placeholderTextColor={Colors.textSecondary}
+                keyboardType="phone-pad"
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Additional Access Instructions{" "}
+                <Text style={styles.fieldOptional}>(optional)</Text>
+              </Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={pmsAccessInstructions}
+                onChangeText={setPmsAccessInstructions}
+                placeholder="e.g., gate code, parking area, HOA requirements..."
+                placeholderTextColor={Colors.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {/* Section D */}
+            <Text style={styles.pmsSectionHeader}>
+              Section D: System Condition
+            </Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Any issues noticed recently? *
+              </Text>
+              {[
+                "No \u2014 everything seems to be working fine",
+                "Yes \u2014 I\u2019ve noticed some issues",
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[
+                    styles.pmsRadioRow,
+                    pmsHasIssues === opt && styles.pmsRadioRowSelected,
+                  ]}
+                  onPress={() => setPmsHasIssues(opt)}
+                >
+                  <View
+                    style={[
+                      styles.pmsRadioDot,
+                      pmsHasIssues === opt && styles.pmsRadioDotSelected,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.pmsRadioText,
+                      pmsHasIssues === opt && styles.pmsRadioTextSelected,
+                    ]}
+                  >
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {pmsHasIssues.startsWith("Yes") && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.fieldLabel}>Please describe the issue</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={pmsIssueDescription}
+                  onChangeText={setPmsIssueDescription}
+                  placeholder="e.g., drop in generation, inverter warnings, physical damage..."
+                  placeholderTextColor={Colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            )}
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Other questions or requests{" "}
+                <Text style={styles.fieldOptional}>(optional)</Text>
+              </Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={pmsOtherRequests}
+                onChangeText={setPmsOtherRequests}
+                placeholder="Any other questions or special requests..."
+                placeholderTextColor={Colors.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.pmsConsentBox}>
+              <Text style={styles.pmsConsentText}>
+                By submitting this form, you authorize Solviva Energy, Inc. to
+                access the site for the PMS. An authorized representative must
+                be present during the visit. Our Aftersales team will reach out
+                within 2 business days to confirm your schedule.
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -1243,5 +1677,95 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: FontSizes.md,
     fontWeight: "700",
+  },
+  // PMS questionnaire styles
+  pmsSectionHeader: {
+    fontSize: FontSizes.md,
+    fontWeight: "700",
+    color: "#1f522b",
+    backgroundColor: "#E8F5E9",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: 6,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  pmsRow: {
+    flexDirection: "row",
+  },
+  pmsOptionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  pmsOptionBtn: {
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: Colors.surface,
+    minWidth: 90,
+    alignItems: "center",
+  },
+  pmsOptionBtnSelected: {
+    borderColor: "#1f522b",
+    backgroundColor: "#E8F5E9",
+  },
+  pmsOptionBtnText: {
+    fontSize: FontSizes.sm,
+    color: Colors.text,
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  pmsOptionBtnTextSelected: {
+    color: "#1f522b",
+    fontWeight: "600",
+  },
+  pmsRadioRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: 8,
+    marginBottom: 4,
+    backgroundColor: Colors.background,
+  },
+  pmsRadioRowSelected: {
+    backgroundColor: "#E8F5E9",
+  },
+  pmsRadioDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    marginRight: 10,
+  },
+  pmsRadioDotSelected: {
+    borderColor: "#1f522b",
+    backgroundColor: "#1f522b",
+  },
+  pmsRadioText: {
+    fontSize: FontSizes.md,
+    color: Colors.text,
+    flex: 1,
+  },
+  pmsRadioTextSelected: {
+    color: "#1f522b",
+    fontWeight: "500",
+  },
+  pmsConsentBox: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 8,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.border,
+  },
+  pmsConsentText: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    lineHeight: 18,
   },
 });
