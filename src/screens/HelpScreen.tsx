@@ -123,7 +123,11 @@ const N8N_WEBHOOK =
   "https://solviva.app.n8n.cloud/webhook/webflow-customer-support";
 
 const stripHtml = (html: string): string =>
-  (html ?? "").replace(/<[^>]*>/g, "").trim();
+  (html ?? "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .trim();
 
 const getOdooStageColor = (stageName: string): string => {
   const s = (stageName ?? "").toLowerCase();
@@ -165,6 +169,10 @@ export default function HelpScreen() {
   // Success modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState({ title: "", body: "" });
+
+  // Form validation errors
+  const [categoryError, setCategoryError] = useState("");
+  const [descriptionError, setDescriptionError] = useState("");
 
   // Screen state
   const [loading, setLoading] = useState(true);
@@ -221,14 +229,18 @@ export default function HelpScreen() {
   };
 
   const handleSubmit = async () => {
+    setCategoryError("");
+    setDescriptionError("");
+    let hasError = false;
     if (!category) {
-      Alert.alert("Required Field", "Please select a category.");
-      return;
+      setCategoryError("Please select a category.");
+      hasError = true;
     }
     if (!description.trim()) {
-      Alert.alert("Required Field", "Please describe your concern.");
-      return;
+      setDescriptionError("Please describe your concern.");
+      hasError = true;
     }
+    if (hasError) return;
 
     setSubmitting(true);
     try {
@@ -458,7 +470,7 @@ export default function HelpScreen() {
               {Platform.OS === "web" ? (
                 <select
                   style={{
-                    border: `1px solid ${Colors.border}`,
+                    border: `1px solid ${categoryError ? "#d32f2f" : Colors.border}`,
                     borderRadius: 12,
                     padding: Spacing.md,
                     fontSize: FontSizes.md,
@@ -467,7 +479,10 @@ export default function HelpScreen() {
                     width: "100%",
                   }}
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  onChange={(e) => {
+                    setCategory(e.target.value);
+                    if (e.target.value) setCategoryError("");
+                  }}
                 >
                   <option value="">Select a category...</option>
                   <optgroup label="── General ──">
@@ -512,10 +527,18 @@ export default function HelpScreen() {
                   </optgroup>
                 </select>
               ) : (
-                <View style={styles.pickerContainer}>
+                <View
+                  style={[
+                    styles.pickerContainer,
+                    categoryError ? { borderColor: "#d32f2f" } : null,
+                  ]}
+                >
                   <Picker
                     selectedValue={category}
-                    onValueChange={(v) => setCategory(v)}
+                    onValueChange={(v) => {
+                      setCategory(v);
+                      if (v) setCategoryError("");
+                    }}
                     style={styles.picker}
                   >
                     <Picker.Item label="Select a category..." value="" />
@@ -594,6 +617,9 @@ export default function HelpScreen() {
                   </Picker>
                 </View>
               )}
+              {categoryError ? (
+                <Text style={styles.fieldError}>{categoryError}</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputContainer}>
@@ -614,15 +640,25 @@ export default function HelpScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.fieldLabel}>Description</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[
+                  styles.input,
+                  styles.textArea,
+                  descriptionError ? styles.inputError : null,
+                ]}
                 placeholder="Describe your concern in detail..."
                 placeholderTextColor={Colors.textSecondary}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
                 value={description}
-                onChangeText={setDescription}
+                onChangeText={(t) => {
+                  setDescription(t);
+                  if (t.trim()) setDescriptionError("");
+                }}
               />
+              {descriptionError ? (
+                <Text style={styles.fieldError}>{descriptionError}</Text>
+              ) : null}
             </View>
 
             <TouchableOpacity
@@ -652,13 +688,16 @@ export default function HelpScreen() {
               const stageColor = getOdooStageColor(stageName);
               // Extract "Concern Name : XYZ" from description if present
               const rawDesc = stripHtml(ticket.description ?? "");
-              const concernMatch = rawDesc.match(/Concern Name\s*:\s*([^\n]+)/i) ||
+              const concernMatch =
+                rawDesc.match(/Concern Name\s*:\s*([^\n]+)/i) ||
                 rawDesc.match(/Subject\s*:\s*([^\n]+)/i);
               const concernLabel = concernMatch ? concernMatch[1].trim() : null;
               return (
                 <View key={ticket.id} style={styles.ticketCard}>
                   <View style={styles.ticketHeader}>
-                    <Text style={styles.ticketSubject} numberOfLines={2}>{ticket.name}</Text>
+                    <Text style={styles.ticketSubject} numberOfLines={2}>
+                      {ticket.name}
+                    </Text>
                     <View
                       style={[
                         styles.statusBadge,
@@ -868,7 +907,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xl,
     fontWeight: "700",
     color: Colors.text,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   sectionSubtitle: {
     fontSize: FontSizes.md,
@@ -967,12 +1006,20 @@ const styles = StyleSheet.create({
     height: 100,
     paddingTop: Spacing.md,
   },
+  inputError: {
+    borderColor: "#d32f2f",
+  },
+  fieldError: {
+    fontSize: FontSizes.sm,
+    color: "#d32f2f",
+    marginTop: 4,
+  },
   submitButton: {
     backgroundColor: "#006ac6",
     borderRadius: 12,
     padding: Spacing.md,
     alignItems: "center",
-    marginTop: Spacing.sm,
+    marginTop: Spacing.md,
     minHeight: 48,
     justifyContent: "center",
   },
