@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -408,7 +408,7 @@ export default function HelpScreen() {
                 )
               }
             >
-              <Text style={styles.contactIcon}>�</Text>
+              <Text style={styles.contactIcon}>🚨</Text>
               <Text style={styles.contactLabel}>Emergency</Text>
               <Text style={styles.contactSub}>After-hours engineer</Text>
             </TouchableOpacity>
