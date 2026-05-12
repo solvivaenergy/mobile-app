@@ -81,23 +81,23 @@ const TICKET_CATEGORIES: CategoryEntry[] = [
   },
   // Technical — Warranty Claims
   {
-    label: "Panel damage \u2013 Warranty Claim",
-    value: "Panel damage \u2013 Warranty Claim",
+    label: "Panel damage – Warranty Claim",
+    value: "Panel damage – Warranty Claim",
     type: "technical",
   },
   {
-    label: "Inverter issues \u2013 Warranty Claim",
-    value: "Inverter issues \u2013 Warranty Claim",
+    label: "Inverter issues – Warranty Claim",
+    value: "Inverter issues – Warranty Claim",
     type: "technical",
   },
   {
-    label: "Battery problems \u2013 Warranty Claim",
-    value: "Battery problems \u2013 Warranty Claim",
+    label: "Battery problems – Warranty Claim",
+    value: "Battery problems – Warranty Claim",
     type: "technical",
   },
   {
-    label: "Other workmanship issues \u2013 Warranty Claim",
-    value: "Other workmanship issues \u2013 Warranty Claim",
+    label: "Other workmanship issues – Warranty Claim",
+    value: "Other workmanship issues – Warranty Claim",
     type: "technical",
   },
 ];
@@ -455,20 +455,20 @@ export default function HelpScreen() {
                   onChange={(e) => setCategory(e.target.value)}
                 >
                   <option value="">Select a category...</option>
-                  <optgroup label="\u2500\u2500 General \u2500\u2500">
+                  <optgroup label="── General ──">
                     <option value="General Inquiry">General Inquiry</option>
                     <option value="Service Availability">
                       Service Availability
                     </option>
                     <option value="Payment Options">Payment Options</option>
                   </optgroup>
-                  <optgroup label="\u2500\u2500 System Performance \u2500\u2500">
+                  <optgroup label="── System Performance ──">
                     <option value="Low energy output">Low energy output</option>
                     <option value="Online monitoring is not working">
                       Online monitoring is not working
                     </option>
                   </optgroup>
-                  <optgroup label="\u2500\u2500 Safety Issues (Call Immediately) \u2500\u2500">
+                  <optgroup label="── Safety Issues (Call Immediately) ──">
                     <option value="Unusual signs on inverter and components (heat, smoke, discoloration, sparks)">
                       Unusual signs on inverter and components (heat, smoke,
                       discoloration, sparks)
@@ -481,18 +481,18 @@ export default function HelpScreen() {
                       Wiring or connection faults / loose connections
                     </option>
                   </optgroup>
-                  <optgroup label="\u2500\u2500 Warranty Claims \u2500\u2500">
-                    <option value="Panel damage \u2013 Warranty Claim">
-                      Panel damage \u2013 Warranty Claim
+                  <optgroup label="── Warranty Claims ──">
+                    <option value="Panel damage – Warranty Claim">
+                      Panel damage – Warranty Claim
                     </option>
-                    <option value="Inverter issues \u2013 Warranty Claim">
-                      Inverter issues \u2013 Warranty Claim
+                    <option value="Inverter issues – Warranty Claim">
+                      Inverter issues – Warranty Claim
                     </option>
-                    <option value="Battery problems \u2013 Warranty Claim">
-                      Battery problems \u2013 Warranty Claim
+                    <option value="Battery problems – Warranty Claim">
+                      Battery problems – Warranty Claim
                     </option>
-                    <option value="Other workmanship issues \u2013 Warranty Claim">
-                      Other workmanship issues \u2013 Warranty Claim
+                    <option value="Other workmanship issues – Warranty Claim">
+                      Other workmanship issues – Warranty Claim
                     </option>
                   </optgroup>
                 </select>
