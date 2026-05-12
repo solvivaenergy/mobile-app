@@ -388,66 +388,23 @@ export const fetchUpcomingPayment = async () => {
 };
 
 // ============================================================
-// Odoo Helpdesk Tickets
+// Odoo Helpdesk Tickets (via n8n proxy to avoid CORS)
 // ============================================================
-const ODOO_URL = 'https://solviva-energy.odoo.com';
-const ODOO_DB = 'solviva-energy';
-const ODOO_USER = 'roald.reyes@aboitizpower.com';
-const ODOO_API_KEY = '71fe2297397c7a2ed2fbeb9794a696c60519ed9f';
+const N8N_GET_TICKETS_WEBHOOK = 'https://solviva.app.n8n.cloud/webhook/get-my-tickets';
 
 export const fetchOdooSupportTickets = async (email: string): Promise<any[]> => {
   try {
-    // Step 1: Authenticate to get uid
-    const authRes = await fetch(`${ODOO_URL}/jsonrpc`, {
+    const res = await fetch(N8N_GET_TICKETS_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'call',
-        id: 1,
-        params: {
-          service: 'common',
-          method: 'authenticate',
-          args: [ODOO_DB, ODOO_USER, ODOO_API_KEY, {}],
-        },
-      }),
+      body: JSON.stringify({ email }),
     });
-    const authData = await authRes.json();
-    const uid = authData?.result;
-    if (!uid || typeof uid !== 'number') return [];
-
-    // Step 2: Search helpdesk.ticket by partner_email OR email_from
-    const searchRes = await fetch(`${ODOO_URL}/jsonrpc`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'call',
-        id: 2,
-        params: {
-          service: 'object',
-          method: 'execute_kw',
-          args: [
-            ODOO_DB,
-            uid,
-            ODOO_API_KEY,
-            'helpdesk.ticket',
-            'search_read',
-            [['|', ['partner_email', '=', email], ['email_from', '=', email]]],
-            {
-              fields: ['name', 'description', 'stage_id', 'priority', 'create_date', 'partner_email', 'email_from'],
-              limit: 50,
-              order: 'create_date desc',
-            },
-          ],
-        },
-      }),
-    });
-    const searchData = await searchRes.json();
-    if (searchData?.error) {
-      console.log('fetchOdooSupportTickets search error:', JSON.stringify(searchData.error));
+    if (!res.ok) {
+      console.log('fetchOdooSupportTickets n8n error:', res.status);
+      return [];
     }
-    return searchData?.result ?? [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   } catch (err) {
     console.log('fetchOdooSupportTickets error:', err);
     return [];
