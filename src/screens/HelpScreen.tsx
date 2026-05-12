@@ -402,7 +402,7 @@ export default function HelpScreen() {
                 )
               }
             >
-              <Text style={styles.contactIcon}>🔧</Text>
+              <Text style={styles.contactIcon}>�</Text>
               <Text style={styles.contactLabel}>Emergency</Text>
               <Text style={styles.contactSub}>After-hours engineer</Text>
             </TouchableOpacity>
@@ -410,7 +410,7 @@ export default function HelpScreen() {
               style={[styles.contactCard, { backgroundColor: "#E8F5E9" }]}
               onPress={() => setShowPmsModal(true)}
             >
-              <Text style={styles.contactIcon}>🔬</Text>
+              <Text style={styles.contactIcon}>🔧</Text>
               <Text style={styles.contactLabel}>PMS</Text>
               <Text style={styles.contactSub}>Schedule a service</Text>
             </TouchableOpacity>
