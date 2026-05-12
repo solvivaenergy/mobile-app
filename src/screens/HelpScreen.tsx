@@ -815,7 +815,7 @@ export default function HelpScreen() {
               style={styles.modalClose}
               onPress={() => setShowPmsModal(false)}
             >
-              <Text style={styles.modalCloseText}>\u2715</Text>
+              <Text style={styles.modalCloseText}>{"\u2715"}</Text>
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -836,7 +836,7 @@ export default function HelpScreen() {
                 style={[styles.userInfoBanner, { marginBottom: Spacing.md }]}
               >
                 <Text style={styles.userInfoText}>
-                  \u2713 Auto-filled from your profile \u2014 edit any field if
+                  {"\u2713"} Auto-filled from your profile — edit any field if
                   needed.
                 </Text>
               </View>
