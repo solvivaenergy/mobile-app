@@ -436,6 +436,14 @@ export default function HelpScreen() {
                   {" \u2022 "}
                   {user.email}
                 </Text>
+                {(user as any)?.solis_station_id && (
+                  <Text style={[styles.userInfoText, { marginTop: 2 }]}>
+                    Station ID:{" "}
+                    <Text style={styles.userInfoBold}>
+                      {(user as any).solis_station_id}
+                    </Text>
+                  </Text>
+                )}
               </View>
             )}
 
