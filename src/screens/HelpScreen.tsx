@@ -162,6 +162,10 @@ export default function HelpScreen() {
   const [pmsNotes, setPmsNotes] = useState("");
   const [pmsSubmitting, setPmsSubmitting] = useState(false);
 
+  // Success modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState({ title: "", body: "" });
+
   // Screen state
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -273,14 +277,15 @@ export default function HelpScreen() {
       });
 
       if (response.ok) {
-        Alert.alert(
-          "Ticket Submitted",
-          "Your support ticket has been created. We will respond within 24-48 hours.",
-          [{ text: "OK", onPress: () => loadData() }],
-        );
         setCategory("");
         setDescription("");
         setContactNumber("");
+        setSuccessMessage({
+          title: "Ticket Submitted!",
+          body: "Your support ticket has been created. We will respond within 24\u201348 hours.",
+        });
+        setShowSuccessModal(true);
+        loadData();
       } else {
         Alert.alert(
           "Submission Error",
@@ -329,11 +334,12 @@ export default function HelpScreen() {
         setShowPmsModal(false);
         setPmsContactNumber("");
         setPmsNotes("");
-        Alert.alert(
-          "PMS Request Submitted",
-          "Your PMS appointment request has been submitted. Our team will contact you to confirm your schedule.",
-          [{ text: "OK", onPress: () => loadData() }],
-        );
+        setSuccessMessage({
+          title: "PMS Request Submitted!",
+          body: "Your appointment request has been submitted. Our team will contact you to confirm your schedule.",
+        });
+        setShowSuccessModal(true);
+        loadData();
       } else {
         Alert.alert(
           "Submission Error",
@@ -804,6 +810,30 @@ export default function HelpScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <View style={styles.successIconCircle}>
+              <Text style={{ fontSize: 36 }}>✅</Text>
+            </View>
+            <Text style={styles.successTitle}>{successMessage.title}</Text>
+            <Text style={styles.successBody}>{successMessage.body}</Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={() => setShowSuccessModal(false)}
+            >
+              <Text style={styles.successButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -1107,5 +1137,60 @@ const styles = StyleSheet.create({
     color: Colors.text,
     lineHeight: 22,
     marginBottom: 4,
+  },
+  successOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.lg,
+  },
+  successCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 32,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 380,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  successIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  successTitle: {
+    fontSize: FontSizes.xl,
+    fontWeight: "700",
+    color: Colors.text,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+  },
+  successBody: {
+    fontSize: FontSizes.md,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: Spacing.xl,
+  },
+  successButton: {
+    backgroundColor: "#1f522b",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    alignItems: "center",
+  },
+  successButtonText: {
+    color: "#fff",
+    fontSize: FontSizes.md,
+    fontWeight: "700",
   },
 });
