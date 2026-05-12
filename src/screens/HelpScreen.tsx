@@ -21,6 +21,7 @@ import {
   fetchOdooSupportTickets,
   fetchEnergyTips,
   fetchUserProfile,
+  fetchSolarSystem,
   formatDate,
   formatPeso,
 } from "../services/dataService";
@@ -243,16 +244,20 @@ export default function HelpScreen() {
     Linking.openURL(`mailto:${supportContacts.email}`);
   };
 
-  const openPmsModal = () => {
+  const openPmsModal = async () => {
     if (user) {
       const parts = (user.full_name ?? "").trim().split(" ");
       setPmsFirstName(parts[0] ?? "");
       setPmsLastName(parts.slice(1).join(" "));
       setPmsEmail(user.email ?? "");
       setPmsContactNumber((user as any).phone ?? "");
-      setPmsSiteAddress((user as any).address ?? "");
       setPmsSiteContactName(user.full_name ?? "");
       setPmsSiteContactNumber((user as any).phone ?? "");
+      // Use solar system installation address as the site address
+      const solarSystem = await fetchSolarSystem();
+      setPmsSiteAddress(
+        solarSystem?.address ?? (user as any).address ?? "",
+      );
     }
     setShowPmsModal(true);
   };
