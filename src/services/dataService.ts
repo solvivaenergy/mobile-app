@@ -233,25 +233,12 @@ export type SupportContacts = {
 };
 
 export const fetchSupportContacts = async (): Promise<SupportContacts | null> => {
-  const { data, error } = await supabase
-    .from('support_contacts')
-    .select('*')
-    .eq('id', 1)
-    .single();
-
-  if (error || !data) {
-    if (error) {
-      console.log('fetchSupportContacts error:', error.message);
-    }
-    return null;
-  }
-
   return {
-    phone: data.support_phone,
-    email: data.support_email,
-    helpdesk: data.helpdesk_url,
-    emergencyEngineer: data.emergency_phone ?? data.support_phone,
-    operatingHours: data.operating_hours,
+    phone: '+639178412254',
+    email: 'tech.support@solvivaenergy.com',
+    helpdesk: 'https://helpdesk.solviva.ph',
+    emergencyEngineer: '+639178412254',
+    operatingHours: '8:00 AM - 6:00 PM, Mon-Sat',
   };
 };
 
@@ -398,6 +385,70 @@ export const fetchUpcomingPayment = async () => {
     return null;
   }
   return data;
+};
+
+// ============================================================
+// Odoo Helpdesk Tickets
+// ============================================================
+const ODOO_URL = 'https://solviva-energy.odoo.com';
+const ODOO_DB = 'solviva-energy';
+const ODOO_USER = 'roald.reyes@aboitizpower.com';
+const ODOO_API_KEY = '71fe2297397c7a2ed2fbeb9794a696c60519ed9f';
+
+export const fetchOdooSupportTickets = async (email: string): Promise<any[]> => {
+  try {
+    // Step 1: Authenticate to get uid
+    const authRes = await fetch(`${ODOO_URL}/jsonrpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'call',
+        id: 1,
+        params: {
+          service: 'common',
+          method: 'authenticate',
+          args: [ODOO_DB, ODOO_USER, ODOO_API_KEY, {}],
+        },
+      }),
+    });
+    const authData = await authRes.json();
+    const uid = authData?.result;
+    if (!uid || typeof uid !== 'number') return [];
+
+    // Step 2: Search helpdesk.ticket by partner_email
+    const searchRes = await fetch(`${ODOO_URL}/jsonrpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'call',
+        id: 2,
+        params: {
+          service: 'object',
+          method: 'execute_kw',
+          args: [
+            ODOO_DB,
+            uid,
+            ODOO_API_KEY,
+            'helpdesk.ticket',
+            'search_read',
+            [[['partner_email', '=', email]]],
+            {
+              fields: ['name', 'description', 'stage_id', 'priority', 'create_date'],
+              limit: 50,
+              order: 'create_date desc',
+            },
+          ],
+        },
+      }),
+    });
+    const searchData = await searchRes.json();
+    return searchData?.result ?? [];
+  } catch (err) {
+    console.log('fetchOdooSupportTickets error:', err);
+    return [];
+  }
 };
 
 // ============================================================

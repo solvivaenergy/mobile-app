@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
+  Modal,
   StyleSheet,
   TouchableOpacity,
   TextInput,
@@ -17,12 +18,13 @@ import { Colors, Spacing, FontSizes } from "../config/theme";
 import {
   fetchSupportContacts,
   SupportContacts,
-  fetchSupportTickets,
+  fetchOdooSupportTickets,
   fetchEnergyTips,
-  createSupportTicket,
+  fetchUserProfile,
   formatDate,
   formatPeso,
 } from "../services/dataService";
+import { supabase } from "../services/supabase";
 
 const DEFAULT_SUPPORT_CONTACTS: SupportContacts = {
   phone: "+639178412254",
@@ -32,32 +34,138 @@ const DEFAULT_SUPPORT_CONTACTS: SupportContacts = {
   operatingHours: "8:00 AM - 6:00 PM, Mon-Sat",
 };
 
+type CategoryEntry = {
+  label: string;
+  value: string;
+  type: "general" | "technical";
+};
+
+const TICKET_CATEGORIES: CategoryEntry[] = [
+  // General (non-technical)
+  { label: "General Inquiry", value: "General Inquiry", type: "general" },
+  {
+    label: "Service Availability",
+    value: "Service Availability",
+    type: "general",
+  },
+  { label: "Payment Options", value: "Payment Options", type: "general" },
+  // Technical — System Performance
+  {
+    label: "Low energy output",
+    value: "Low energy output",
+    type: "technical",
+  },
+  {
+    label: "Online monitoring is not working",
+    value: "Online monitoring is not working",
+    type: "technical",
+  },
+  // Technical — Safety Issues
+  {
+    label:
+      "Unusual signs on inverter and components (heat, smoke, discoloration, sparks)",
+    value:
+      "Unusual signs on inverter and components (heat, smoke, discoloration, sparks)",
+    type: "technical",
+  },
+  { label: "Electrical shocks", value: "Electrical shocks", type: "technical" },
+  {
+    label: "Structural or roof damage / leak",
+    value: "Structural or roof damage / leak",
+    type: "technical",
+  },
+  {
+    label: "Wiring or connection faults / loose connections",
+    value: "Wiring or connection faults / loose connections",
+    type: "technical",
+  },
+  // Technical — Warranty Claims
+  {
+    label: "Panel damage \u2013 Warranty Claim",
+    value: "Panel damage \u2013 Warranty Claim",
+    type: "technical",
+  },
+  {
+    label: "Inverter issues \u2013 Warranty Claim",
+    value: "Inverter issues \u2013 Warranty Claim",
+    type: "technical",
+  },
+  {
+    label: "Battery problems \u2013 Warranty Claim",
+    value: "Battery problems \u2013 Warranty Claim",
+    type: "technical",
+  },
+  {
+    label: "Other workmanship issues \u2013 Warranty Claim",
+    value: "Other workmanship issues \u2013 Warranty Claim",
+    type: "technical",
+  },
+];
+
+const getGmt8Timestamp = (): string => {
+  const now = new Date();
+  const gmt8Time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(now);
+  const [datePart, timePart] = gmt8Time.split(", ");
+  const [day, month, year] = datePart.split("/");
+  return `${year}-${month}-${day} ${timePart}`;
+};
+
+const N8N_WEBHOOK =
+  "https://solviva.app.n8n.cloud/webhook/webflow-customer-support";
+
+const stripHtml = (html: string): string =>
+  (html ?? "").replace(/<[^>]*>/g, "").trim();
+
+const getOdooStageColor = (stageName: string): string => {
+  const s = (stageName ?? "").toLowerCase();
+  if (s.includes("solved") || s.includes("done") || s.includes("closed"))
+    return Colors.success;
+  if (s.includes("progress") || s.includes("process")) return "#2196F3";
+  if (s.includes("cancel")) return Colors.textSecondary;
+  return Colors.warning;
+};
+
+const getOdooPriorityLabel = (priority: string): string => {
+  switch (priority) {
+    case "1":
+      return "Low";
+    case "2":
+      return "High";
+    case "3":
+      return "Urgent";
+    default:
+      return "Normal";
+  }
+};
+
 export default function HelpScreen() {
-  // Ticket type selector
-  const [ticketType, setTicketType] = useState<"non-technical" | "technical">(
-    "non-technical",
-  );
+  // User profile (auto-filled into forms)
+  const [user, setUser] = useState<any>(null);
 
-  // Non-Technical form fields
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [subject, setSubject] = useState("");
+  // Unified ticket form fields
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
-
-  // Technical form fields
-  const [techEmail, setTechEmail] = useState("");
-  const [plantRefNumber, setPlantRefNumber] = useState("");
-  const [pvOwnerName, setPvOwnerName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
-  const [serviceType, setServiceType] = useState<"issue" | "pms" | "">("");
-  const [concernCategory, setConcernCategory] = useState("");
-  const [concernDescription, setConcernDescription] = useState("");
-  const [techStep, setTechStep] = useState(1); // For multi-step technical form
 
+  // PMS modal
+  const [showPmsModal, setShowPmsModal] = useState(false);
+  const [pmsContactNumber, setPmsContactNumber] = useState("");
+  const [pmsNotes, setPmsNotes] = useState("");
+  const [pmsSubmitting, setPmsSubmitting] = useState(false);
+
+  // Screen state
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [recaptchaReady, setRecaptchaReady] = useState(false);
   const [tickets, setTickets] = useState<any[]>([]);
   const [tips, setTips] = useState<any[]>([]);
   const [supportContacts, setSupportContacts] = useState<SupportContacts>(
@@ -66,16 +174,22 @@ export default function HelpScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [t, tp] = await Promise.all([
-        fetchSupportTickets(),
+      const [profile, contactData, tipsData] = await Promise.all([
+        fetchUserProfile(),
+        fetchSupportContacts(),
         fetchEnergyTips(),
       ]);
-      setTickets(t);
-      setTips(tp);
+      setUser(profile);
+      if (contactData) setSupportContacts(contactData);
+      setTips(tipsData);
 
-      const contacts = await fetchSupportContacts();
-      if (contacts) {
-        setSupportContacts(contacts);
+      // Fetch tickets from Odoo using the authenticated user's email
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+      if (authUser?.email) {
+        const odooTickets = await fetchOdooSupportTickets(authUser.email);
+        setTickets(odooTickets);
       }
     } catch (err) {
       console.log("HelpScreen loadData error:", err);
@@ -89,37 +203,6 @@ export default function HelpScreen() {
     loadData();
   }, [loadData]);
 
-  // Load reCAPTCHA v3 script only on web platform
-  useEffect(() => {
-    if (Platform.OS === "web") {
-      // Check if script already exists
-      if (document.getElementById("recaptcha-script")) {
-        setRecaptchaReady(true);
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.id = "recaptcha-script";
-      script.src =
-        "https://www.google.com/recaptcha/api.js?render=6Ld6LikrAAAAAJg5XHJs4lNWa0xxwS7H5Noi_ozA";
-      script.async = true;
-      script.onload = () => {
-        setRecaptchaReady(true);
-      };
-      document.head.appendChild(script);
-
-      return () => {
-        // Cleanup on unmount
-        const scriptElement = document.getElementById("recaptcha-script");
-        if (scriptElement) {
-          document.head.removeChild(scriptElement);
-        }
-      };
-    } else {
-      // Mobile: reCAPTCHA handled by WebView component
-      setRecaptchaReady(true);
-    }
-  }, []);
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
@@ -133,94 +216,9 @@ export default function HelpScreen() {
     Linking.openURL(`mailto:${supportContacts.email}`);
   };
 
-  // Execute reCAPTCHA v3 on web only, skip on mobile
-  const executeRecaptcha = async (): Promise<string> => {
-    return new Promise((resolve) => {
-      if (Platform.OS === "web" && recaptchaReady) {
-        try {
-          // @ts-ignore - grecaptcha is loaded dynamically
-          if (typeof grecaptcha !== "undefined") {
-            // @ts-ignore
-            grecaptcha
-              .execute("6Ld6LikrAAAAAJg5XHJs4lNWa0xxwS7H5Noi_ozA", {
-                action: "submit",
-              })
-              .then((token: string) => resolve(token))
-              .catch((error: any) => {
-                console.error("Web reCAPTCHA error:", error);
-                resolve("");
-              });
-          } else {
-            resolve("");
-          }
-        } catch (error) {
-          console.error("reCAPTCHA error:", error);
-          resolve("");
-        }
-      } else {
-        // Mobile: Skip reCAPTCHA (will be validated differently on server)
-        console.log("Mobile submission - skipping reCAPTCHA");
-        resolve("");
-      }
-    });
-  };
-
-  const handleNextStep = () => {
-    if (techStep === 1) {
-      // Validate step 1
-      if (!techEmail.trim()) {
-        Alert.alert("Required Field", "Please enter your email address.");
-        return;
-      }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(techEmail.trim())) {
-        Alert.alert("Invalid Email", "Please enter a valid email address.");
-        return;
-      }
-      if (!plantRefNumber.trim()) {
-        Alert.alert(
-          "Required Field",
-          "Please enter the plant reference number.",
-        );
-        return;
-      }
-      setTechStep(2);
-    } else if (techStep === 2) {
-      // Validate step 2
-      if (!pvOwnerName.trim()) {
-        Alert.alert("Required Field", "Please enter the PV owner name.");
-        return;
-      }
-      if (!contactNumber.trim()) {
-        Alert.alert("Required Field", "Please enter a contact number.");
-        return;
-      }
-      if (!serviceType) {
-        Alert.alert("Required Field", "Please select a service type.");
-        return;
-      }
-      setTechStep(3);
-    }
-  };
-
-  const handleBackStep = () => {
-    if (techStep > 1) {
-      setTechStep(techStep - 1);
-    }
-  };
-
-  const handleSubmitNonTechnical = async () => {
-    // Validate all required fields
-    if (!fullName.trim()) {
-      Alert.alert("Required Field", "Please enter your full name.");
-      return;
-    }
-    if (!email.trim()) {
-      Alert.alert("Required Field", "Please enter your email address.");
-      return;
-    }
-    if (!subject) {
-      Alert.alert("Required Field", "Please select a subject.");
+  const handleSubmit = async () => {
+    if (!category) {
+      Alert.alert("Required Field", "Please select a category.");
       return;
     }
     if (!description.trim()) {
@@ -228,80 +226,60 @@ export default function HelpScreen() {
       return;
     }
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      Alert.alert("Invalid Email", "Please enter a valid email address.");
-      return;
-    }
-
     setSubmitting(true);
-
     try {
-      // Get GMT+8 timestamp
-      const now = new Date();
-      const gmt8Time = new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Asia/Manila",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }).format(now);
+      const timestamp = getGmt8Timestamp();
+      const selectedCat = TICKET_CATEGORIES.find((c) => c.value === category);
+      const ticketType = selectedCat?.type ?? "general";
+      const userName = user?.full_name ?? "";
+      const userEmail = user?.email ?? "";
 
-      // Format timestamp as YYYY-MM-DD HH:mm:ss
-      const [datePart, timePart] = gmt8Time.split(", ");
-      const [day, month, year] = datePart.split("/");
-      const formattedTimestamp = `${year}-${month}-${day} ${timePart}`;
-
-      // Get reCAPTCHA token (web only)
-      const recaptchaToken = await executeRecaptcha();
-
-      // Prepare form data
-      const formData: any = {
-        "Full-Name": fullName.trim(),
-        Email: email.trim(),
-        Subject: subject,
-        "Concern-Description": description.trim(),
-        form_name: "solviva-support-general-20250506",
-        "ticket-type": "general",
-        "submission-timestamp": formattedTimestamp,
-      };
-
-      // Add reCAPTCHA token if on web
-      if (recaptchaToken) {
-        formData["g-recaptcha-response"] = recaptchaToken;
+      let formData: Record<string, string>;
+      if (ticketType === "technical") {
+        formData = {
+          "Plant-Reference-Number": "N/A",
+          "PV-Owner-Name": userName,
+          Email: userEmail,
+          Phone: contactNumber.trim() || "N/A",
+          "Service-Type": "Issue with Solar PV System",
+          "Detailed-Concern": category,
+          "Concern-Description": description.trim(),
+          form_name: "solviva-support-technical-20260512",
+          "ticket-type": "technical",
+          "submission-timestamp": timestamp,
+        };
+      } else {
+        formData = {
+          "Full-Name": userName,
+          Email: userEmail,
+          Subject: category,
+          "Concern-Description": description.trim(),
+          form_name: "solviva-support-general-20260512",
+          "ticket-type": "general",
+          "submission-timestamp": timestamp,
+        };
       }
 
-      // Submit to n8n webhook
-      const response = await fetch(
-        "https://solviva.app.n8n.cloud/webhook/webflow-customer-support",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Submission-Source": Platform.OS === "web" ? "web" : "mobile-app",
-            "X-Platform": Platform.OS,
-            "X-App-Version": "1.0.0",
-          },
-          body: JSON.stringify(formData),
+      const response = await fetch(N8N_WEBHOOK, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Submission-Source": Platform.OS === "web" ? "web" : "mobile-app",
+          "X-Platform": Platform.OS,
+          "X-App-Version": "1.0.0",
         },
-      );
+        body: JSON.stringify(formData),
+      });
 
       if (response.ok) {
         Alert.alert(
           "Ticket Submitted",
           "Your support ticket has been created. We will respond within 24-48 hours.",
-          [{ text: "OK" }],
+          [{ text: "OK", onPress: () => loadData() }],
         );
-        // Clear form
-        setFullName("");
-        setEmail("");
-        setSubject("");
+        setCategory("");
         setDescription("");
-        loadData();
+        setContactNumber("");
       } else {
         Alert.alert(
           "Submission Error",
@@ -319,132 +297,54 @@ export default function HelpScreen() {
     }
   };
 
-  const handleSubmitTechnical = async () => {
-    // Validate based on service type
-    if (serviceType === "issue") {
-      if (!concernCategory) {
-        Alert.alert("Required Field", "Please select a concern category.");
-        return;
-      }
-      if (!concernDescription.trim()) {
-        Alert.alert("Required Field", "Please describe your concern.");
-        return;
-      }
-    }
-
-    setSubmitting(true);
-
+  const handleSubmitPms = async () => {
+    setPmsSubmitting(true);
     try {
-      // Get GMT+8 timestamp
-      const now = new Date();
-      const gmt8Time = new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Asia/Manila",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }).format(now);
-
-      const [datePart, timePart] = gmt8Time.split(", ");
-      const [day, month, year] = datePart.split("/");
-      const formattedTimestamp = `${year}-${month}-${day} ${timePart}`;
-
-      // Get reCAPTCHA token (web only)
-      const recaptchaToken = await executeRecaptcha();
-
-      // Prepare form data
-      const formData: any = {
-        Email: techEmail.trim(),
-        "Plant-Reference-Number": plantRefNumber.trim(),
-        "PV-Owner-Name": pvOwnerName.trim(),
-        Phone: contactNumber.trim(),
-        "Service-Type":
-          serviceType === "issue"
-            ? "Issue with Solar PV System"
-            : "Schedule a PMS / Cleaning Appointment",
-        form_name: "solviva-support-technical-20250506",
+      const timestamp = getGmt8Timestamp();
+      const formData: Record<string, string> = {
+        "Plant-Reference-Number": "N/A",
+        "PV-Owner-Name": user?.full_name ?? "",
+        Email: user?.email ?? "",
+        Phone: pmsContactNumber.trim() || "N/A",
+        "Service-Type": "Schedule a PMS / Cleaning Appointment",
+        "Concern-Description": pmsNotes.trim() || "PMS Appointment Request",
+        form_name: "solviva-support-technical-20260512",
         "ticket-type": "technical",
-        "submission-timestamp": formattedTimestamp,
+        "submission-timestamp": timestamp,
       };
 
-      if (serviceType === "issue") {
-        formData["Detailed-Concern"] = concernCategory;
-        formData["Concern-Description"] = concernDescription.trim();
-      }
-
-      // Add reCAPTCHA token if on web
-      if (recaptchaToken) {
-        formData["g-recaptcha-response"] = recaptchaToken;
-      }
-
-      // Submit to n8n webhook
-      const response = await fetch(
-        "https://solviva.app.n8n.cloud/webhook/webflow-customer-support",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Submission-Source": Platform.OS === "web" ? "web" : "mobile-app",
-            "X-Platform": Platform.OS,
-            "X-App-Version": "1.0.0",
-          },
-          body: JSON.stringify(formData),
+      const response = await fetch(N8N_WEBHOOK, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Submission-Source": Platform.OS === "web" ? "web" : "mobile-app",
+          "X-Platform": Platform.OS,
+          "X-App-Version": "1.0.0",
         },
-      );
+        body: JSON.stringify(formData),
+      });
 
       if (response.ok) {
+        setShowPmsModal(false);
+        setPmsContactNumber("");
+        setPmsNotes("");
         Alert.alert(
-          "Ticket Submitted",
-          "Your technical support ticket has been created. We will respond within 24-48 hours.",
-          [{ text: "OK" }],
+          "PMS Request Submitted",
+          "Your PMS appointment request has been submitted. Our team will contact you to confirm your schedule.",
+          [{ text: "OK", onPress: () => loadData() }],
         );
-        // Clear form and reset to step 1
-        setTechEmail("");
-        setPlantRefNumber("");
-        setPvOwnerName("");
-        setContactNumber("");
-        setServiceType("");
-        setConcernCategory("");
-        setConcernDescription("");
-        setTechStep(1);
-        loadData();
       } else {
         Alert.alert(
           "Submission Error",
-          "There was a problem submitting the form. Please try again.",
+          "There was a problem submitting the request. Please try again.",
         );
       }
     } catch (error) {
-      console.error("Submit error:", error);
-      Alert.alert(
-        "Error",
-        "Something went wrong. Please try again later or contact us directly.",
-      );
+      console.error("PMS submit error:", error);
+      Alert.alert("Error", "Something went wrong. Please try again later.");
     } finally {
-      setSubmitting(false);
+      setPmsSubmitting(false);
     }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "open":
-        return Colors.warning;
-      case "in_progress":
-        return "#2196F3";
-      case "resolved":
-        return Colors.success;
-      case "closed":
-        return Colors.textSecondary;
-      default:
-        return Colors.textSecondary;
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    return status.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
   if (loading) {
@@ -463,169 +363,152 @@ export default function HelpScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Help & Support</Text>
-        <Text style={styles.headerSubtitle}>We're here for you</Text>
-      </View>
-
-      {/* Quick Contact */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Contact</Text>
-        <View style={styles.contactGrid}>
-          <TouchableOpacity
-            style={styles.contactCard}
-            onPress={() => handleCall(supportContacts.phone)}
-          >
-            <Text style={styles.contactIcon}>📞</Text>
-            <Text style={styles.contactLabel}>Call Support</Text>
-            <Text style={styles.contactSub}>{supportContacts.phone}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.contactCard} onPress={handleEmail}>
-            <Text style={styles.contactIcon}>✉️</Text>
-            <Text style={styles.contactLabel}>Email Us</Text>
-            <Text style={styles.contactSub}>{supportContacts.email}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.contactCard, { backgroundColor: "#FFF3E0" }]}
-            onPress={() =>
-              handleCall(
-                supportContacts.emergencyEngineer ?? supportContacts.phone,
-              )
-            }
-          >
-            <Text style={styles.contactIcon}>🔧</Text>
-            <Text style={styles.contactLabel}>Emergency</Text>
-            <Text style={styles.contactSub}>After-hours engineer</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.contactCard, { backgroundColor: "#E8F5E9" }]}
-            onPress={() =>
-              Alert.alert("Live Chat", "Live chat feature coming soon!")
-            }
-          >
-            <Text style={styles.contactIcon}>💬</Text>
-            <Text style={styles.contactLabel}>Live Chat</Text>
-            <Text style={styles.contactSub}>AI-powered support</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Submit New Ticket */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Customer Care</Text>
-        <Text style={styles.sectionSubtitle}>
-          Got a question or need support? Submit a ticket to our support team
-          and we'll review your request right away to ensure you get the help
-          you need.
-        </Text>
-
-        {/* Ticket Type Selector */}
-        <View style={styles.ticketTypeSelector}>
-          <TouchableOpacity
-            style={[
-              styles.ticketTypeButton,
-              ticketType === "non-technical" && styles.ticketTypeButtonActive,
-            ]}
-            onPress={() => {
-              setTicketType("non-technical");
-              setTechStep(1);
-            }}
-          >
-            <Text
-              style={[
-                styles.ticketTypeText,
-                ticketType === "non-technical" && styles.ticketTypeTextActive,
-              ]}
-            >
-              Non-Technical
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.ticketTypeButton,
-              ticketType === "technical" && styles.ticketTypeButtonActive,
-            ]}
-            onPress={() => {
-              setTicketType("technical");
-              setTechStep(1);
-            }}
-          >
-            <Text
-              style={[
-                styles.ticketTypeText,
-                ticketType === "technical" && styles.ticketTypeTextActive,
-              ]}
-            >
-              Technical
-            </Text>
-          </TouchableOpacity>
+    <>
+      <ScrollView
+        style={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Help & Support</Text>
+          <Text style={styles.headerSubtitle}>We're here for you</Text>
         </View>
 
-        {/* Non-Technical Form */}
-        {ticketType === "non-technical" && (
+        {/* Quick Contact */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Contact</Text>
+          <View style={styles.contactGrid}>
+            <TouchableOpacity
+              style={styles.contactCard}
+              onPress={() => handleCall(supportContacts.phone)}
+            >
+              <Text style={styles.contactIcon}>📞</Text>
+              <Text style={styles.contactLabel}>Call Support</Text>
+              <Text style={styles.contactSub}>{supportContacts.phone}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.contactCard} onPress={handleEmail}>
+              <Text style={styles.contactIcon}>✉️</Text>
+              <Text style={styles.contactLabel}>Email Us</Text>
+              <Text style={styles.contactSub}>{supportContacts.email}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.contactCard, { backgroundColor: "#FFF3E0" }]}
+              onPress={() =>
+                handleCall(
+                  supportContacts.emergencyEngineer ?? supportContacts.phone,
+                )
+              }
+            >
+              <Text style={styles.contactIcon}>🔧</Text>
+              <Text style={styles.contactLabel}>Emergency</Text>
+              <Text style={styles.contactSub}>After-hours engineer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.contactCard, { backgroundColor: "#E8F5E9" }]}
+              onPress={() => setShowPmsModal(true)}
+            >
+              <Text style={styles.contactIcon}>🔬</Text>
+              <Text style={styles.contactLabel}>PMS</Text>
+              <Text style={styles.contactSub}>Schedule a service</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Submit New Ticket */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Customer Care</Text>
+          <Text style={styles.sectionSubtitle}>
+            Got a question or need support? Submit a ticket to our support team
+            and we'll review your request right away to ensure you get the help
+            you need.
+          </Text>
+
           <View style={styles.formCard}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.fieldLabel}>Full Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your full name"
-                placeholderTextColor={Colors.textSecondary}
-                value={fullName}
-                onChangeText={setFullName}
-              />
-            </View>
+            {/* Auto-filled user info banner */}
+            {user && (
+              <View style={styles.userInfoBanner}>
+                <Text style={styles.userInfoText}>
+                  Submitting as{" "}
+                  <Text style={styles.userInfoBold}>{user.full_name}</Text>
+                  {" \u2022 "}
+                  {user.email}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.inputContainer}>
-              <Text style={styles.fieldLabel}>Email Address</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                placeholderTextColor={Colors.textSecondary}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.fieldLabel}>Subject</Text>
+              <Text style={styles.fieldLabel}>Category</Text>
               {Platform.OS === "web" ? (
                 <select
                   style={{
-                    borderWidth: 1,
-                    borderColor: Colors.border,
+                    border: `1px solid ${Colors.border}`,
                     borderRadius: 12,
                     padding: Spacing.md,
                     fontSize: FontSizes.md,
                     color: Colors.text,
                     backgroundColor: Colors.surface,
+                    width: "100%",
                   }}
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
                 >
-                  <option value=""></option>
-                  <option value="General Inquiry">General Inquiry</option>
-                  <option value="Service Availability">
-                    Service Availability
-                  </option>
-                  <option value="Payment Options">Payment Options</option>
+                  <option value="">Select a category...</option>
+                  <optgroup label="\u2500\u2500 General \u2500\u2500">
+                    <option value="General Inquiry">General Inquiry</option>
+                    <option value="Service Availability">
+                      Service Availability
+                    </option>
+                    <option value="Payment Options">Payment Options</option>
+                  </optgroup>
+                  <optgroup label="\u2500\u2500 System Performance \u2500\u2500">
+                    <option value="Low energy output">Low energy output</option>
+                    <option value="Online monitoring is not working">
+                      Online monitoring is not working
+                    </option>
+                  </optgroup>
+                  <optgroup label="\u2500\u2500 Safety Issues (Call Immediately) \u2500\u2500">
+                    <option value="Unusual signs on inverter and components (heat, smoke, discoloration, sparks)">
+                      Unusual signs on inverter and components (heat, smoke,
+                      discoloration, sparks)
+                    </option>
+                    <option value="Electrical shocks">Electrical shocks</option>
+                    <option value="Structural or roof damage / leak">
+                      Structural or roof damage / leak
+                    </option>
+                    <option value="Wiring or connection faults / loose connections">
+                      Wiring or connection faults / loose connections
+                    </option>
+                  </optgroup>
+                  <optgroup label="\u2500\u2500 Warranty Claims \u2500\u2500">
+                    <option value="Panel damage \u2013 Warranty Claim">
+                      Panel damage \u2013 Warranty Claim
+                    </option>
+                    <option value="Inverter issues \u2013 Warranty Claim">
+                      Inverter issues \u2013 Warranty Claim
+                    </option>
+                    <option value="Battery problems \u2013 Warranty Claim">
+                      Battery problems \u2013 Warranty Claim
+                    </option>
+                    <option value="Other workmanship issues \u2013 Warranty Claim">
+                      Other workmanship issues \u2013 Warranty Claim
+                    </option>
+                  </optgroup>
                 </select>
               ) : (
                 <View style={styles.pickerContainer}>
                   <Picker
-                    selectedValue={subject}
-                    onValueChange={(itemValue) => setSubject(itemValue)}
+                    selectedValue={category}
+                    onValueChange={(v) => setCategory(v)}
                     style={styles.picker}
                   >
-                    <Picker.Item label="Select a subject" value="" />
+                    <Picker.Item label="Select a category..." value="" />
+                    <Picker.Item
+                      label="\u2500\u2500 General \u2500\u2500"
+                      value=""
+                      enabled={false}
+                    />
                     <Picker.Item
                       label="General Inquiry"
                       value="General Inquiry"
@@ -638,16 +521,86 @@ export default function HelpScreen() {
                       label="Payment Options"
                       value="Payment Options"
                     />
+                    <Picker.Item
+                      label="\u2500\u2500 System Performance \u2500\u2500"
+                      value=""
+                      enabled={false}
+                    />
+                    <Picker.Item
+                      label="Low energy output"
+                      value="Low energy output"
+                    />
+                    <Picker.Item
+                      label="Online monitoring is not working"
+                      value="Online monitoring is not working"
+                    />
+                    <Picker.Item
+                      label="\u2500\u2500 Safety Issues \u2500\u2500"
+                      value=""
+                      enabled={false}
+                    />
+                    <Picker.Item
+                      label="Unusual signs on inverter and components"
+                      value="Unusual signs on inverter and components (heat, smoke, discoloration, sparks)"
+                    />
+                    <Picker.Item
+                      label="Electrical shocks"
+                      value="Electrical shocks"
+                    />
+                    <Picker.Item
+                      label="Structural or roof damage / leak"
+                      value="Structural or roof damage / leak"
+                    />
+                    <Picker.Item
+                      label="Wiring or connection faults / loose connections"
+                      value="Wiring or connection faults / loose connections"
+                    />
+                    <Picker.Item
+                      label="\u2500\u2500 Warranty Claims \u2500\u2500"
+                      value=""
+                      enabled={false}
+                    />
+                    <Picker.Item
+                      label="Panel damage \u2013 Warranty Claim"
+                      value="Panel damage \u2013 Warranty Claim"
+                    />
+                    <Picker.Item
+                      label="Inverter issues \u2013 Warranty Claim"
+                      value="Inverter issues \u2013 Warranty Claim"
+                    />
+                    <Picker.Item
+                      label="Battery problems \u2013 Warranty Claim"
+                      value="Battery problems \u2013 Warranty Claim"
+                    />
+                    <Picker.Item
+                      label="Other workmanship issues \u2013 Warranty Claim"
+                      value="Other workmanship issues \u2013 Warranty Claim"
+                    />
                   </Picker>
                 </View>
               )}
             </View>
 
             <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Phone Number{" "}
+                <Text style={styles.fieldOptional}>(optional)</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your contact number"
+                placeholderTextColor={Colors.textSecondary}
+                keyboardType="phone-pad"
+                value={contactNumber}
+                onChangeText={setContactNumber}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
               <Text style={styles.fieldLabel}>Description</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Describe your concern..."
+                placeholder="Describe your concern in detail..."
                 placeholderTextColor={Colors.textSecondary}
                 multiline
                 numberOfLines={4}
@@ -659,420 +612,190 @@ export default function HelpScreen() {
 
             <TouchableOpacity
               style={[styles.submitButton, submitting && styles.buttonDisabled]}
-              onPress={handleSubmitNonTechnical}
+              onPress={handleSubmit}
               disabled={submitting}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.submitButtonText}>Submit</Text>
+                <Text style={styles.submitButtonText}>Submit Ticket</Text>
               )}
             </TouchableOpacity>
           </View>
-        )}
+        </View>
 
-        {/* Technical Form - Multi-step */}
-        {ticketType === "technical" && (
-          <View style={styles.formCard}>
-            {/* Step 1: Customer Verification */}
-            {techStep === 1 && (
-              <>
-                <Text style={styles.stepTitle}>Customer Verification</Text>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.fieldLabel}>Email Address</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter your email"
-                    placeholderTextColor={Colors.textSecondary}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    value={techEmail}
-                    onChangeText={setTechEmail}
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Text style={styles.fieldLabel}>Plant Reference Number</Text>
-                  <Text style={styles.fieldSublabel}>
-                    The Plant Reference Number can be found on the turnover
-                    document files that were submitted, as well as on the
-                    sticker attached to the inverter. If it is not found, please
-                    write "N/A."
-                  </Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter plant reference number"
-                    placeholderTextColor={Colors.textSecondary}
-                    value={plantRefNumber}
-                    onChangeText={setPlantRefNumber}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={styles.nextButton}
-                  onPress={handleNextStep}
-                >
-                  <Text style={styles.nextButtonText}>Next</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* Step 2: Detailed Information */}
-            {techStep === 2 && (
-              <>
-                <Text style={styles.stepTitle}>
-                  Detailed information about the concern
-                </Text>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.fieldLabel}>
-                    Complete Name of Solar PV System Owner
-                  </Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter owner name"
-                    placeholderTextColor={Colors.textSecondary}
-                    value={pvOwnerName}
-                    onChangeText={setPvOwnerName}
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Text style={styles.fieldLabel}>Contact Number</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter contact number"
-                    placeholderTextColor={Colors.textSecondary}
-                    keyboardType="phone-pad"
-                    value={contactNumber}
-                    onChangeText={setContactNumber}
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Text style={styles.fieldLabel}>What is this about?</Text>
-                  <TouchableOpacity
-                    style={styles.radioOption}
-                    onPress={() => setServiceType("issue")}
-                  >
-                    <View style={styles.radioButton}>
-                      {serviceType === "issue" && (
-                        <View style={styles.radioButtonSelected} />
-                      )}
-                    </View>
-                    <Text style={styles.radioLabel}>
-                      Issue with Solar PV System
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.radioOption}
-                    onPress={() => setServiceType("pms")}
-                  >
-                    <View style={styles.radioButton}>
-                      {serviceType === "pms" && (
-                        <View style={styles.radioButtonSelected} />
-                      )}
-                    </View>
-                    <Text style={styles.radioLabel}>
-                      Schedule a PMS / Cleaning Appointment
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={handleBackStep}
-                  >
-                    <Text style={styles.backButtonText}>Back</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.nextButton}
-                    onPress={handleNextStep}
-                  >
-                    <Text style={styles.nextButtonText}>Next</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-
-            {/* Step 3: Issue Details */}
-            {techStep === 3 && serviceType === "issue" && (
-              <>
-                <Text style={styles.stepTitle}>Issue with Solar PV System</Text>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.fieldLabel}>
-                    Concern Category (Detailed)
-                  </Text>
-                  {Platform.OS === "web" ? (
-                    <select
-                      style={{
-                        borderWidth: 1,
-                        borderColor: Colors.border,
-                        borderRadius: 12,
-                        padding: Spacing.md,
-                        fontSize: FontSizes.md,
-                        color: Colors.text,
-                        backgroundColor: Colors.surface,
-                      }}
-                      value={concernCategory}
-                      onChange={(e) => setConcernCategory(e.target.value)}
+        {/* My Tickets */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>My Tickets</Text>
+          {tickets.length === 0 ? (
+            <Text style={styles.emptyText}>No tickets found.</Text>
+          ) : (
+            tickets.map((ticket: any) => {
+              const stageName = Array.isArray(ticket.stage_id)
+                ? ticket.stage_id[1]
+                : "New";
+              const stageColor = getOdooStageColor(stageName);
+              const plainDesc = stripHtml(ticket.description ?? "");
+              return (
+                <View key={ticket.id} style={styles.ticketCard}>
+                  <View style={styles.ticketHeader}>
+                    <Text style={styles.ticketSubject}>{ticket.name}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: stageColor + "20" },
+                      ]}
                     >
-                      <option value="">Select one...</option>
-                      <option value="Higher Electricity Bill after Solar Installation">
-                        Higher Electricity Bill after Solar Installation
-                      </option>
-                      <option value="Low Energy Output / No savings in Electricity Bill">
-                        Low Energy Output / No savings in Electricity Bill
-                      </option>
-                      <option value="Roof leak">Roof leak</option>
-                      <option value="Online monitoring is not working">
-                        Online monitoring is not working
-                      </option>
-                      <option value="Unusual signs on the inverter (heat, smoke, discoloration, or abnormal light indicators)">
-                        Unusual signs on the inverter (heat, smoke,
-                        discoloration, or abnormal light indicators)
-                      </option>
-                      <option value="Panel Damage - Warranty Claim">
-                        Panel Damage - Warranty Claim
-                      </option>
-                      <option value="Inverter Issues - Warranty Claim">
-                        Inverter Issues - Warranty Claim
-                      </option>
-                      <option value="Battery Problems - Warranty Claim">
-                        Battery Problems - Warranty Claim
-                      </option>
-                      <option value="Wiring or Connection Faults / Loose or faulty connections">
-                        Wiring or Connection Faults / Loose or faulty
-                        connections
-                      </option>
-                      <option value="Structural / Roof Damage">
-                        Structural / Roof Damage
-                      </option>
-                      <option value="Other Workmanship Warranty Claim">
-                        Other Workmanship Warranty Claim
-                      </option>
-                      <option value="Overheating Components">
-                        Overheating Components
-                      </option>
-                      <option value="Electrical Shocks">
-                        Electrical Shocks
-                      </option>
-                    </select>
-                  ) : (
-                    <View style={styles.pickerContainer}>
-                      <Picker
-                        selectedValue={concernCategory}
-                        onValueChange={(itemValue) =>
-                          setConcernCategory(itemValue)
-                        }
-                        style={styles.picker}
-                      >
-                        <Picker.Item label="Select one..." value="" />
-                        <Picker.Item
-                          label="Higher Electricity Bill after Solar Installation"
-                          value="Higher Electricity Bill after Solar Installation"
-                        />
-                        <Picker.Item
-                          label="Low Energy Output / No savings in Electricity Bill"
-                          value="Low Energy Output / No savings in Electricity Bill"
-                        />
-                        <Picker.Item label="Roof leak" value="Roof leak" />
-                        <Picker.Item
-                          label="Online monitoring is not working"
-                          value="Online monitoring is not working"
-                        />
-                        <Picker.Item
-                          label="Unusual signs on the inverter"
-                          value="Unusual signs on the inverter (heat, smoke, discoloration, or abnormal light indicators)"
-                        />
-                        <Picker.Item
-                          label="Panel Damage - Warranty Claim"
-                          value="Panel Damage - Warranty Claim"
-                        />
-                        <Picker.Item
-                          label="Inverter Issues - Warranty Claim"
-                          value="Inverter Issues - Warranty Claim"
-                        />
-                        <Picker.Item
-                          label="Battery Problems - Warranty Claim"
-                          value="Battery Problems - Warranty Claim"
-                        />
-                        <Picker.Item
-                          label="Wiring or Connection Faults"
-                          value="Wiring or Connection Faults / Loose or faulty connections"
-                        />
-                        <Picker.Item
-                          label="Structural / Roof Damage"
-                          value="Structural / Roof Damage"
-                        />
-                        <Picker.Item
-                          label="Other Workmanship Warranty Claim"
-                          value="Other Workmanship Warranty Claim"
-                        />
-                        <Picker.Item
-                          label="Overheating Components"
-                          value="Overheating Components"
-                        />
-                        <Picker.Item
-                          label="Electrical Shocks"
-                          value="Electrical Shocks"
-                        />
-                      </Picker>
+                      <Text style={[styles.statusText, { color: stageColor }]}>
+                        {stageName}
+                      </Text>
                     </View>
+                  </View>
+                  {plainDesc.length > 0 && (
+                    <Text style={styles.ticketDescription} numberOfLines={2}>
+                      {plainDesc}
+                    </Text>
                   )}
+                  <View style={styles.ticketFooter}>
+                    <Text style={styles.ticketDate}>
+                      {ticket.create_date
+                        ? formatDate(ticket.create_date)
+                        : "\u2014"}
+                    </Text>
+                    <Text style={styles.ticketPriority}>
+                      Priority: {getOdooPriorityLabel(ticket.priority)}
+                    </Text>
+                  </View>
                 </View>
+              );
+            })
+          )}
+        </View>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.fieldLabel}>
-                    Detailed Description of Concern
-                  </Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    placeholder="Describe your concern in detail..."
-                    placeholderTextColor={Colors.textSecondary}
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                    value={concernDescription}
-                    onChangeText={setConcernDescription}
-                  />
-                </View>
-
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={handleBackStep}
-                  >
-                    <Text style={styles.backButtonText}>Back</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.submitButton,
-                      submitting && styles.buttonDisabled,
-                    ]}
-                    onPress={handleSubmitTechnical}
-                    disabled={submitting}
-                  >
-                    {submitting ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.submitButtonText}>Submit</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-
-            {/* Step 3: PMS Information */}
-            {techStep === 3 && serviceType === "pms" && (
-              <>
-                <Text style={styles.pmsTitle}>
-                  Thank you for considering our Preventive Maintenance Service
-                  (PMS) for your Solar PV System.
-                </Text>
-                <Text style={styles.pmsText}>
-                  • Starting cost: ₱10,000 VAT inclusive for systems up to 10kW.
-                  {"\n"}• For larger systems: ₱900 per kWp for systems above
-                  10kW, up to 100kWp.
-                </Text>
-                <Text style={styles.pmsText}>
-                  Our PMS includes solar module cleaning and inspection, thermal
-                  scanning, inverter and panel board checks, grounding system
-                  assessment, monitoring device inspection, and ensuring system
-                  safety and structural integrity.
-                </Text>
-                <Text style={styles.pmsText}>
-                  Please note that the cost is an estimate and may vary based on
-                  location, system size, type, and specific requirements.
-                </Text>
-                <Text style={styles.pmsText}>
-                  We look forward to helping you keep your Solar PV System in
-                  peak condition!
-                </Text>
-
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={handleBackStep}
-                  >
-                    <Text style={styles.backButtonText}>Back</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.submitButton,
-                      submitting && styles.buttonDisabled,
-                    ]}
-                    onPress={handleSubmitTechnical}
-                    disabled={submitting}
-                  >
-                    {submitting ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.submitButtonText}>Submit</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* My Tickets */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>My Tickets</Text>
-        {tickets.map((ticket: any) => (
-          <View key={ticket.id} style={styles.ticketCard}>
-            <View style={styles.ticketHeader}>
-              <Text style={styles.ticketSubject}>{ticket.subject}</Text>
-              <View
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: getStatusColor(ticket.status) + "20" },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusText,
-                    { color: getStatusColor(ticket.status) },
-                  ]}
-                >
-                  {getStatusLabel(ticket.status)}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.ticketDescription} numberOfLines={2}>
-              {ticket.description}
-            </Text>
-            <View style={styles.ticketFooter}>
-              <Text style={styles.ticketDate}>
-                Created: {formatDate(ticket.created_at)}
-              </Text>
-              <Text style={styles.ticketPriority}>
-                Priority: {ticket.priority}
+        {/* AI Energy Tips */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>💡 AI Energy Tips</Text>
+          {tips.map((tip: any) => (
+            <View key={tip.id} style={styles.tipCard}>
+              <Text style={styles.tipTitle}>{tip.title}</Text>
+              <Text style={styles.tipDescription}>{tip.description}</Text>
+              <Text style={styles.tipSavings}>
+                Potential savings:{" "}
+                {formatPeso(Number(tip.potential_savings_php) || 0)}/month
               </Text>
             </View>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
 
-      {/* AI Energy Tips */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>💡 AI Energy Tips</Text>
-        {tips.map((tip: any) => (
-          <View key={tip.id} style={styles.tipCard}>
-            <Text style={styles.tipTitle}>{tip.title}</Text>
-            <Text style={styles.tipDescription}>{tip.description}</Text>
-            <Text style={styles.tipSavings}>
-              Potential savings:{" "}
-              {formatPeso(Number(tip.potential_savings_php) || 0)}/month
+        <View style={{ height: 30 }} />
+      </ScrollView>
+
+      {/* PMS Modal */}
+      <Modal
+        visible={showPmsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPmsModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              Preventive Maintenance Service
             </Text>
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setShowPmsModal(false)}
+            >
+              <Text style={styles.modalCloseText}>\u2715</Text>
+            </TouchableOpacity>
           </View>
-        ))}
-      </View>
+          <ScrollView
+            style={styles.modalBody}
+            contentContainerStyle={{ paddingBottom: 40 }}
+          >
+            <Text style={styles.pmsTitle}>
+              Thank you for considering our Preventive Maintenance Service (PMS)
+              for your Solar PV System.
+            </Text>
+            <View style={styles.pmsPriceCard}>
+              <Text style={styles.pmsPriceLabel}>Pricing</Text>
+              <Text style={styles.pmsPriceItem}>
+                {"\u2022"} Up to 10 kWp \u2014 starting at \u20b110,000 VAT
+                inclusive
+              </Text>
+              <Text style={styles.pmsPriceItem}>
+                {"\u2022"} Above 10 kWp (up to 100 kWp) \u2014 \u20b1900 per kWp
+              </Text>
+              <Text style={styles.pmsNote}>
+                Prices are estimates and may vary based on location, system
+                size, and specific requirements.
+              </Text>
+            </View>
 
-      <View style={{ height: 30 }} />
-    </ScrollView>
+            <Text style={styles.pmsSectionLabel}>What PMS Includes:</Text>
+            {[
+              "Solar module cleaning and inspection",
+              "Thermal scanning",
+              "Inverter and panel board checks",
+              "Grounding system assessment",
+              "Monitoring device inspection",
+              "System safety and structural integrity check",
+            ].map((item) => (
+              <Text key={item} style={styles.pmsListItem}>
+                \u2713 {item}
+              </Text>
+            ))}
+
+            <View style={[styles.inputContainer, { marginTop: Spacing.lg }]}>
+              <Text style={styles.fieldLabel}>
+                Contact Number{" "}
+                <Text style={styles.fieldOptional}>(optional)</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your contact number"
+                placeholderTextColor={Colors.textSecondary}
+                keyboardType="phone-pad"
+                value={pmsContactNumber}
+                onChangeText={setPmsContactNumber}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.fieldLabel}>
+                Additional Notes{" "}
+                <Text style={styles.fieldOptional}>(optional)</Text>
+              </Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Any specific concerns or preferred schedule..."
+                placeholderTextColor={Colors.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                value={pmsNotes}
+                onChangeText={setPmsNotes}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                pmsSubmitting && styles.buttonDisabled,
+              ]}
+              onPress={handleSubmitPms}
+              disabled={pmsSubmitting}
+            >
+              {pmsSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit PMS Request</Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -1150,6 +873,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
+  userInfoBanner: {
+    backgroundColor: "#E8F5E9",
+    borderRadius: 8,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  userInfoText: {
+    fontSize: FontSizes.sm,
+    color: "#2E7D32",
+  },
+  userInfoBold: {
+    fontWeight: "700",
+  },
   inputContainer: {
     marginBottom: Spacing.md,
   },
@@ -1158,6 +894,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.text,
     marginBottom: Spacing.xs,
+  },
+  fieldOptional: {
+    fontWeight: "400",
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
   },
   input: {
     borderWidth: 1,
@@ -1199,6 +940,12 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: FontSizes.lg,
     fontWeight: "700",
+  },
+  emptyText: {
+    fontSize: FontSizes.md,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    paddingVertical: Spacing.lg,
   },
   ticketCard: {
     backgroundColor: Colors.surface,
@@ -1269,114 +1016,87 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: Spacing.sm,
   },
-  ticketTypeSelector: {
-    flexDirection: "row",
-    marginBottom: Spacing.md,
-    backgroundColor: Colors.border,
-    borderRadius: 12,
-    padding: 4,
-  },
-  ticketTypeButton: {
+  // Modal styles
+  modalContainer: {
     flex: 1,
-    paddingVertical: Spacing.sm,
-    borderRadius: 8,
-    alignItems: "center",
+    backgroundColor: Colors.background,
   },
-  ticketTypeButtonActive: {
-    backgroundColor: "#006ac6",
-  },
-  ticketTypeText: {
-    fontSize: FontSizes.md,
-    fontWeight: "600",
-    color: Colors.textSecondary,
-  },
-  ticketTypeTextActive: {
-    color: "#ffffff",
-  },
-  stepTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: "600",
-    color: Colors.text,
-    marginBottom: Spacing.md,
-  },
-  fieldSublabel: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
-    lineHeight: 18,
-  },
-  radioOption: {
+  modalHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "#006ac6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.sm,
-  },
-  radioButtonSelected: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#006ac6",
-  },
-  radioLabel: {
-    fontSize: FontSizes.md,
-    color: Colors.text,
-    flex: 1,
-  },
-  buttonRow: {
-    flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: Spacing.md,
-    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 60,
+    paddingBottom: Spacing.md,
+    backgroundColor: "#d2ff1e",
   },
-  backButton: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: Spacing.md,
-    alignItems: "center",
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  backButtonText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.lg,
-    fontWeight: "600",
-  },
-  nextButton: {
-    flex: 1,
-    backgroundColor: "#006ac6",
-    borderRadius: 12,
-    padding: Spacing.md,
-    alignItems: "center",
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  nextButtonText: {
-    color: "#ffffff",
-    fontSize: FontSizes.lg,
+  modalTitle: {
+    fontSize: FontSizes.xl,
     fontWeight: "700",
+    color: "#1B5E20",
+    flex: 1,
+  },
+  modalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCloseText: {
+    fontSize: FontSizes.lg,
+    color: "#1B5E20",
+    fontWeight: "700",
+  },
+  modalBody: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
   },
   pmsTitle: {
     fontSize: FontSizes.lg,
-    fontWeight: "700",
+    fontWeight: "600",
     color: Colors.text,
     marginBottom: Spacing.md,
+    lineHeight: 24,
   },
-  pmsText: {
+  pmsPriceCard: {
+    backgroundColor: "#E8F5E9",
+    borderRadius: 12,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: "#1f522b",
+  },
+  pmsPriceLabel: {
+    fontSize: FontSizes.md,
+    fontWeight: "700",
+    color: "#1f522b",
+    marginBottom: Spacing.xs,
+  },
+  pmsPriceItem: {
+    fontSize: FontSizes.md,
+    color: Colors.text,
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  pmsNote: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
+    lineHeight: 18,
+  },
+  pmsSectionLabel: {
+    fontSize: FontSizes.md,
+    fontWeight: "700",
+    color: Colors.text,
+    marginBottom: Spacing.sm,
+  },
+  pmsListItem: {
     fontSize: FontSizes.md,
     color: Colors.text,
     lineHeight: 22,
-    marginBottom: Spacing.md,
+    marginBottom: 4,
   },
 });
