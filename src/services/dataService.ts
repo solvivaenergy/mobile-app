@@ -416,7 +416,7 @@ export const fetchOdooSupportTickets = async (email: string): Promise<any[]> => 
     const uid = authData?.result;
     if (!uid || typeof uid !== 'number') return [];
 
-    // Step 2: Search helpdesk.ticket by partner_email
+    // Step 2: Search helpdesk.ticket by partner_email OR email_from
     const searchRes = await fetch(`${ODOO_URL}/jsonrpc`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -433,9 +433,9 @@ export const fetchOdooSupportTickets = async (email: string): Promise<any[]> => 
             ODOO_API_KEY,
             'helpdesk.ticket',
             'search_read',
-            [[['partner_email', '=', email]]],
+            [['|', ['partner_email', '=', email], ['email_from', '=', email]]],
             {
-              fields: ['name', 'description', 'stage_id', 'priority', 'create_date'],
+              fields: ['name', 'description', 'stage_id', 'priority', 'create_date', 'partner_email', 'email_from'],
               limit: 50,
               order: 'create_date desc',
             },
@@ -444,6 +444,9 @@ export const fetchOdooSupportTickets = async (email: string): Promise<any[]> => 
       }),
     });
     const searchData = await searchRes.json();
+    if (searchData?.error) {
+      console.log('fetchOdooSupportTickets search error:', JSON.stringify(searchData.error));
+    }
     return searchData?.result ?? [];
   } catch (err) {
     console.log('fetchOdooSupportTickets error:', err);
