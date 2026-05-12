@@ -180,7 +180,6 @@ export default function HelpScreen() {
   const [pmsHasIssues, setPmsHasIssues] = useState("");
   const [pmsIssueDescription, setPmsIssueDescription] = useState("");
   const [pmsOtherRequests, setPmsOtherRequests] = useState("");
-  const [pmsSubmitting, setPmsSubmitting] = useState(false);
 
   // Success modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -351,7 +350,7 @@ export default function HelpScreen() {
     }
   };
 
-  const handleSubmitPms = async () => {
+  const handleSubmitPms = () => {
     const missing: string[] = [];
     if (!pmsFirstName.trim() || !pmsLastName.trim())
       missing.push("First and Last Name");
@@ -372,107 +371,50 @@ export default function HelpScreen() {
       );
       return;
     }
-    setPmsSubmitting(true);
-    try {
-      const timestamp = getGmt8Timestamp();
-      const concernDescription = [
-        `=== PMS Questionnaire ===`,
-        `--- Section A: Client & Site ---`,
-        `Name: ${pmsFirstName} ${pmsLastName}`,
-        `Email: ${pmsEmail}`,
-        `Contact: ${pmsContactNumber}`,
-        `Site Address: ${pmsSiteAddress}`,
-        `--- Section B: Schedule ---`,
-        `Preferred Date: ${pmsPrefDate}`,
-        `Preferred Time: ${pmsPrefTime}`,
-        pmsAltDate ? `Alternative Date: ${pmsAltDate}` : null,
-        `--- Section C: Site Access ---`,
-        `Panel Location: ${pmsPanelLocation}`,
-        `Access Equipment: ${pmsAccessEquipment.join(", ")}`,
-        `Work Permit: ${pmsWorkPermit}`,
-        pmsWorkPermitReqs
-          ? `Work Permit Requirements: ${pmsWorkPermitReqs}`
-          : null,
-        pmsSiteContactName
-          ? `Site Contact: ${pmsSiteContactName} / ${pmsSiteContactNumber}`
-          : null,
-        pmsAccessInstructions
-          ? `Access Instructions: ${pmsAccessInstructions}`
-          : null,
-        `--- Section D: System Condition ---`,
-        `Issues Recently: ${pmsHasIssues}`,
-        pmsIssueDescription
-          ? `Issue Description: ${pmsIssueDescription}`
-          : null,
-        pmsOtherRequests ? `Other Requests: ${pmsOtherRequests}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      const formData: Record<string, string> = {
-        "Plant-Reference-Number": (user as any)?.solis_station_id ?? "N/A",
-        "PV-Owner-Name": `${pmsFirstName} ${pmsLastName}`.trim(),
-        Email: pmsEmail,
-        Phone: pmsContactNumber,
-        "Service-Type": "Schedule a PMS / Cleaning Appointment",
-        "Concern-Description": concernDescription,
-        "Site-Address": pmsSiteAddress,
-        "Preferred-Date": pmsPrefDate,
-        "Preferred-Time": pmsPrefTime,
-        form_name: "solviva-pms-questionnaire-20260330",
-        "ticket-type": "technical",
-        "submission-timestamp": timestamp,
-      };
-
-      const response = await fetch(N8N_WEBHOOK, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Submission-Source": "mobile-app",
-          "X-Platform": Platform.OS,
-          "X-App-Version": "1.0.0",
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        setShowPmsModal(false);
-        setPmsFirstName("");
-        setPmsLastName("");
-        setPmsEmail("");
-        setPmsContactNumber("");
-        setPmsSiteAddress("");
-        setPmsPrefDate("");
-        setPmsPrefTime("");
-        setPmsAltDate("");
-        setPmsPanelLocation("");
-        setPmsAccessEquipment([]);
-        setPmsWorkPermit("");
-        setPmsWorkPermitReqs("");
-        setPmsSiteContactName("");
-        setPmsSiteContactNumber("");
-        setPmsAccessInstructions("");
-        setPmsHasIssues("");
-        setPmsIssueDescription("");
-        setPmsOtherRequests("");
-        setSuccessMessage({
-          title: "PMS Request Submitted!",
-          body: "Your appointment request has been submitted. Our Aftersales team will reach out within 2 business days to confirm your schedule.",
-        });
-        setShowSuccessModal(true);
-        loadData();
-      } else {
-        Alert.alert(
-          "Submission Error",
-          "There was a problem submitting the request. Please try again.",
-        );
-      }
-    } catch (error) {
-      console.error("PMS submit error:", error);
-      Alert.alert("Error", "Something went wrong. Please try again later.");
-    } finally {
-      setPmsSubmitting(false);
-    }
+    // TODO: wire up actual submission once Odoo integration is confirmed
+    console.log("[PMS] Questionnaire payload (pending integration):", {
+      name: `${pmsFirstName} ${pmsLastName}`,
+      email: pmsEmail,
+      phone: pmsContactNumber,
+      siteAddress: pmsSiteAddress,
+      preferredDate: pmsPrefDate,
+      preferredTime: pmsPrefTime,
+      altDate: pmsAltDate,
+      panelLocation: pmsPanelLocation,
+      accessEquipment: pmsAccessEquipment,
+      workPermit: pmsWorkPermit,
+      workPermitReqs: pmsWorkPermitReqs,
+      siteContact: `${pmsSiteContactName} / ${pmsSiteContactNumber}`,
+      accessInstructions: pmsAccessInstructions,
+      hasIssues: pmsHasIssues,
+      issueDescription: pmsIssueDescription,
+      otherRequests: pmsOtherRequests,
+      stationId: (user as any)?.solis_station_id ?? "N/A",
+    });
+    setShowPmsModal(false);
+    setPmsFirstName("");
+    setPmsLastName("");
+    setPmsEmail("");
+    setPmsContactNumber("");
+    setPmsSiteAddress("");
+    setPmsPrefDate("");
+    setPmsPrefTime("");
+    setPmsAltDate("");
+    setPmsPanelLocation("");
+    setPmsAccessEquipment([]);
+    setPmsWorkPermit("");
+    setPmsWorkPermitReqs("");
+    setPmsSiteContactName("");
+    setPmsSiteContactNumber("");
+    setPmsAccessInstructions("");
+    setPmsHasIssues("");
+    setPmsIssueDescription("");
+    setPmsOtherRequests("");
+    setSuccessMessage({
+      title: "PMS Request Submitted!",
+      body: "Your appointment request has been submitted. Our Aftersales team will reach out within 2 business days to confirm your schedule.",
+    });
+    setShowSuccessModal(true);
   };
 
   if (loading) {
@@ -1271,18 +1213,10 @@ export default function HelpScreen() {
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.submitButton,
-                pmsSubmitting && styles.buttonDisabled,
-              ]}
+              style={styles.submitButton}
               onPress={handleSubmitPms}
-              disabled={pmsSubmitting}
             >
-              {pmsSubmitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Submit PMS Request</Text>
-              )}
+              <Text style={styles.submitButtonText}>Submit PMS Request</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
